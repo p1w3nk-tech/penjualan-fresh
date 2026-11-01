@@ -1,0 +1,1879 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Penjualan 2026 — Multi-Role Dashboard</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0f172a;--panel:#1e293b;--panel2:#273449;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#38bdf8;--accent2:#22c55e;--danger:#ef4444;--warn:#f59e0b}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+header{background:linear-gradient(90deg,#0ea5e9,#6366f1);padding:18px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:20px;font-weight:700}
+header .sub{color:#e0f2fe;font-size:12px;opacity:.9}
+.container{padding:20px 24px;max-width:1600px;margin:0 auto}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+.btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;transition:.15s}
+.btn:hover{background:#334155;border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:#0f172a;border-color:var(--accent);font-weight:600}
+.btn.green{background:var(--accent2);color:#052e16;border-color:var(--accent2);font-weight:600}
+.btn.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn.purple{background:#8b5cf6;color:#fff;border-color:#8b5cf6;font-weight:600}
+.file-label{display:inline-flex;align-items:center;gap:8px}
+input[type=file]{display:none}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:18px}
+.card h2{font-size:15px;margin-bottom:12px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:8px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.kpi{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px}
+.kpi .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.kpi .value{font-size:20px;font-weight:700;margin-top:4px;color:var(--accent)}
+.kpi .value.green{color:var(--accent2)}
+.kpi .value.warn{color:var(--warn)}
+.kpi .value.danger{color:var(--danger)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+th{background:var(--panel2);color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10.5px;letter-spacing:.4px;position:sticky;top:0}
+tr:hover td{background:#26334a}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{max-height:360px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:1000px){.grid2{grid-template-columns:1fr}}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end}
+.form-grid label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+.form-grid input,.form-grid select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:7px;font-size:13px}
+.form-grid input:focus,.form-grid select:focus{outline:none;border-color:var(--accent)}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.badge.lunas{background:#14532d;color:#86efac}
+.badge.sebagian{background:#78350f;color:#fcd34d}
+.badge.belum{background:#7f1d1d;color:#fca5a5}
+.badge.role-admin{background:#4c1d95;color:#ddd6fe}
+.badge.role-sales{background:#0c4a6e;color:#7dd3fc}
+.badge.role-viewer{background:#334155;color:#cbd5e1}
+.muted{color:var(--muted)}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--accent);padding:12px 18px;border-radius:9px;opacity:0;transform:translateY(20px);transition:.3s;z-index:99;max-width:420px}
+.toast.show{opacity:1;transform:translateY(0)}
+.chart-wrap{position:relative;height:280px}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tab{padding:7px 14px;border-radius:7px;background:var(--panel2);border:1px solid var(--border);cursor:pointer;font-size:12.5px}
+.tab.active{background:var(--accent);color:#0f172a;font-weight:600;border-color:var(--accent)}
+.pane{display:none}
+.pane.active{display:block}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+.aging-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:12px}
+.inline-file{padding:7px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);width:100%}
+.search-wrap{position:relative}
+.search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--panel2);border:1px solid var(--accent);border-radius:8px;max-height:260px;overflow:auto;z-index:50;display:none;box-shadow:0 12px 32px rgba(0,0,0,.55)}
+.search-results.show{display:block}
+.search-item{padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;font-size:12px}
+.search-item:last-child{border-bottom:none}
+.search-item:hover,.search-item.active{background:#334155}
+.search-item .inv{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.search-item .cust{color:var(--muted);font-size:11px;margin-top:2px}
+.search-item .sisa{color:var(--warn);font-variant-numeric:tabular-nums;white-space:nowrap;align-self:center}
+.selected-chip{display:inline-flex;align-items:center;gap:8px;background:#0c4a6e;border:1px solid var(--accent);color:#e0f2fe;padding:4px 6px 4px 10px;border-radius:999px;font-size:11.5px;margin-top:8px}
+.selected-chip button{background:none;border:none;color:#7dd3fc;cursor:pointer;font-size:13px;line-height:1;padding:0 4px}
+.tabs.sub{background:var(--bg);border:1px solid var(--border);padding:4px;border-radius:9px;display:inline-flex;margin-bottom:12px}
+.tabs.sub .tab{background:transparent;border:none;font-size:12px;padding:6px 14px;border-radius:6px}
+.tabs.sub .tab.active{background:var(--accent);color:#0f172a}
+.umur-early{color:#86efac}
+.umur-warn{color:#fcd34d}
+.umur-bad{color:#fca5a5}
+.slicer{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:18px}
+@media(min-width:1000px){.slicer{position:sticky;top:0;z-index:40;box-shadow:0 6px 18px rgba(0,0,0,.35)}}
+.slicer-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.slicer-head b{color:var(--accent);font-size:13px}
+.slicer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
+.slicer-grid label{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+.slicer-grid select,.slicer-grid input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:7px;font-size:13px}
+.slicer-grid .on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.scroll-wide{max-height:500px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+/* AUTH */
+.auth-overlay{position:fixed;inset:0;background:rgba(15,23,42,.95);backdrop-filter:blur(6px);z-index:999;display:none;align-items:center;justify-content:center}
+.auth-overlay.show{display:flex}
+.auth-card{background:var(--panel);border:1px solid var(--accent);border-radius:14px;padding:28px;width:min(400px,92vw);box-shadow:0 24px 64px rgba(0,0,0,.6)}
+.auth-card h2{font-size:20px;margin-bottom:6px;color:var(--accent)}
+.auth-card p.sub{color:var(--muted);font-size:12px;margin-bottom:18px}
+.auth-card input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:11px 12px;border-radius:8px;font-size:13.5px;margin-bottom:10px}
+.auth-card .row{display:flex;gap:8px;margin-top:6px}
+.auth-card .row .btn{flex:1;justify-content:center;text-align:center}
+.auth-err{color:#fca5a5;font-size:12px;margin-top:8px;min-height:16px}
+.auth-card .hint{font-size:11px;color:var(--muted);margin-top:14px;line-height:1.6}
+.auth-user{display:inline-flex;align-items:center;gap:8px;background:rgba(15,23,42,.55);padding:5px 10px;border-radius:999px;font-size:12px;color:#e0f2fe;margin-left:auto}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;animation:pulse 1.2s infinite}
+.sync-dot.live{background:#22c55e;animation:none}
+.sync-dot.err{background:#ef4444;animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.85);backdrop-filter:blur(4px);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--panel);border:1px solid var(--accent);border-radius:14px;padding:22px;width:min(460px,94vw);box-shadow:0 24px 64px rgba(0,0,0,.6)}
+.modal h3{font-size:16px;margin-bottom:14px;color:var(--accent)}
+.modal label{display:block;font-size:11px;color:var(--muted);margin:10px 0 5px;text-transform:uppercase;letter-spacing:.4px}
+.modal input,.modal select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:7px;font-size:13px}
+.modal .row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+[data-requires][style*="display:none"]{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- AUTH OVERLAY -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-card">
+    <h2>🔐 Login Dashboard</h2>
+    <p class="sub">Masuk untuk mengakses data penjualan</p>
+    <input type="email" id="authEmail" placeholder="Email" autocomplete="email">
+    <input type="password" id="authPassword" placeholder="Password (min 6 karakter)" autocomplete="current-password">
+    <div class="row">
+      <button class="btn primary" id="authLogin">Masuk</button>
+      <button class="btn" id="authRegister">Daftar Admin</button>
+    </div>
+    <div class="auth-err" id="authErr"></div>
+    <div class="hint">
+      ℹ️ Hanya email admin yang dikonfigurasi dapat mendaftar sendiri.<br>
+      User lain dibuat oleh admin lewat menu <b>Manajemen User</b>.
+    </div>
+  </div>
+</div>
+
+<!-- EDIT PAYMENT MODAL -->
+<div class="modal-overlay" id="editPayModal">
+  <div class="modal">
+    <h3>✏️ Edit Pembayaran</h3>
+    <input type="hidden" id="editPayId">
+    <label>Invoice</label><input type="text" id="editPayInv" disabled>
+    <label>Tanggal Bayar</label><input type="date" id="editPayDate">
+    <label>Jumlah Bayar (Rp)</label><input type="number" id="editPayAmount" min="1" step="1">
+    <label>Metode</label><select id="editPayMethod"><option>Transfer</option><option>Tunai</option><option>Giro</option><option>Lainnya</option></select>
+    <label>Bank / Ref / Catatan</label><input type="text" id="editPayRef">
+    <div class="row"><button class="btn" id="editPayCancel">Batal</button><button class="btn green" id="editPaySave">Simpan</button></div>
+  </div>
+</div>
+
+<header>
+  <div>
+    <h1>📊 Data Penjualan 2026</h1>
+    <div class="sub">Dashboard · Piutang · Top 30 · Multi-Role (Admin / Sales / Viewer)</div>
+  </div>
+  <div class="auth-user" id="authUserBox" style="display:none">
+    <span class="sync-dot" id="syncDot"></span>
+    <span id="authUserEmail">—</span>
+    <span id="authUserRole" class="badge"></span>
+    <button class="btn danger" id="btnLogout" style="padding:4px 10px;font-size:11px">Logout</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <label class="btn primary file-label" data-requires="edit">
+      📥 Import Penjualan
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+    </label>
+    <label class="btn file-label" style="border-color:#22c55e" data-requires="edit">
+      💳 Import Pembayaran
+      <input type="file" id="payFileInput" accept=".xlsx,.xls,.csv">
+    </label>
+    <button class="btn" id="btnSample" data-requires="admin">Muat Contoh Data</button>
+    <button class="btn" id="btnTemplatePay">📄 Template Pembayaran</button>
+    <button class="btn green" id="btnExport">💾 Export Semua</button>
+    <button class="btn green" id="btnExportPay">💳 Export Pembayaran</button>
+    <button class="btn purple" id="btnSaveJson">💾 Simpan JSON</button>
+    <label class="btn file-label" style="border-color:#8b5cf6" data-requires="admin">
+      📂 Restore JSON
+      <input type="file" id="jsonFileInput" accept=".json">
+    </label>
+    <button class="btn danger" id="btnReset" data-requires="admin">🗑️ Reset</button>
+    <span class="muted" id="statusText">Belum login</span>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" data-pane="dashboard">Dashboard 30 Hari</div>
+    <div class="tab" data-pane="piutang">Piutang & Pembayaran</div>
+    <div class="tab" data-pane="rincian">Rincian Pembayaran</div>
+    <div class="tab" data-pane="grouping">Grouping</div>
+    <div class="tab" data-pane="aging">Aging Piutang</div>
+    <div class="tab" data-pane="admin" data-requires="admin">👥 Manajemen User</div>
+  </div>
+
+  <!-- SLICER -->
+  <div class="slicer" id="slicerBar">
+    <div class="slicer-head">
+      <b>🎚️ Slicer</b>
+      <span class="muted" id="slInfo" style="font-size:11.5px">Tanpa filter</span>
+      <button type="button" class="btn" id="btnSlReset" style="margin-left:auto;padding:5px 12px;font-size:12px">↺ Reset Slicer</button>
+    </div>
+    <div class="slicer-grid">
+      <div><label>Tahun</label><select id="slTahun"><option value="">Semua Tahun</option></select></div>
+      <div><label>Bulan</label><select id="slBulan"><option value="">Semua Bulan</option>
+        <option value="1">Januari</option><option value="2">Februari</option><option value="3">Maret</option>
+        <option value="4">April</option><option value="5">Mei</option><option value="6">Juni</option>
+        <option value="7">Juli</option><option value="8">Agustus</option><option value="9">September</option>
+        <option value="10">Oktober</option><option value="11">November</option><option value="12">Desember</option>
+      </select></div>
+      <div><label>Minggu</label><select id="slMinggu"><option value="">Semua Minggu</option>
+        <option value="1">Minggu 1</option><option value="2">Minggu 2</option><option value="3">Minggu 3</option>
+        <option value="4">Minggu 4</option><option value="5">Minggu 5</option><option value="6">Minggu 6</option>
+      </select></div>
+      <div><label>Sales</label><input type="text" id="slSales" list="dlSales" placeholder="Semua Sales" autocomplete="off"><datalist id="dlSales"></datalist></div>
+      <div><label>Pelanggan</label><input type="text" id="slCust" list="dlCust" placeholder="Semua Pelanggan" autocomplete="off"><datalist id="dlCust"></datalist></div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="pane active" id="pane-dashboard">
+    <div class="card">
+      <h2>📈 Ringkasan &amp; Rekonsiliasi</h2>
+      <div class="kpis" id="kpiBox">
+        <div class="kpi"><div class="label">Penjualan Net (Semua)</div><div class="value" id="kpiTotalAll">Rp 0</div></div>
+        <div class="kpi"><div class="label">Total Piutang (Semua)</div><div class="value warn" id="kpiPiutangAll">Rp 0</div></div>
+        <div class="kpi"><div class="label">Selisih (Net - Bayar)</div><div class="value green" id="kpiSelisih">Rp 0</div></div>
+        <div class="kpi"><div class="label">Jumlah Invoice</div><div class="value" id="kpiInv">0</div></div>
+        <div class="kpi"><div class="label">Pelanggan Aktif</div><div class="value" id="kpiCust">0</div></div>
+        <div class="kpi"><div class="label">Penjualan <span class="winLbl">30 Hari</span></div><div class="value" id="kpiTotal30">Rp 0</div></div>
+        <div class="kpi"><div class="label">Pembayaran <span class="winLbl">30 Hari</span></div><div class="value green" id="kpiPay">Rp 0</div></div>
+      </div>
+      <div id="rekonInfo" class="muted" style="margin-top:10px"></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card"><h2>🏆 Top 30 Pelanggan (<span class="winLbl">30 Hari</span>)</h2>
+        <div class="scroll"><table id="tblTopCust"><thead><tr><th>#</th><th>Pelanggan</th><th class="num">Penjualan</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="card"><h2>🏆 Top 30 Produk (<span class="winLbl">30 Hari</span>)</h2>
+        <div class="scroll"><table id="tblTopProd"><thead><tr><th>#</th><th>Produk</th><th class="num">Penjualan</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2>🏆 Top 30 Qty Produk (<span class="winLbl">30 Hari</span>)</h2>
+        <div class="scroll"><table id="tblTopInv"><thead><tr><th>#</th><th>Produk</th><th class="num">Qty (PCS)</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="card"><h2>🏆 Top 30 Diskon Tertinggi (<span class="winLbl">30 Hari</span>)</h2>
+        <div class="scroll"><table id="tblTopDay"><thead><tr><th>#</th><th>Pelanggan</th><th class="num">Total Diskon</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+    <div class="card"><h2>📉 Tren <span id="trenLbl">Harian 30 Hari</span></h2>
+      <div class="chart-wrap"><canvas id="chartTren"></canvas></div></div>
+  </div>
+
+  <!-- PIUTANG -->
+  <div class="pane" id="pane-piutang">
+    <div class="card" data-requires="edit">
+      <h2>📥 Import Pembayaran dari Excel</h2>
+      <p class="muted" style="margin-bottom:10px">Kolom wajib: <b>INV</b>, <b>TGL_BAYAR</b>, <b>JUMLAH_BAYAR</b>. Opsional: METODE, BANK, NO_REF, CATATAN.</p>
+      <div class="form-grid">
+        <div><label>File Excel Pembayaran</label><input type="file" id="payFileInput2" accept=".xlsx,.xls,.csv" class="inline-file"></div>
+        <div><button type="button" class="btn green" id="btnImportPay" style="width:100%">Import Sekarang</button></div>
+        <div><button type="button" class="btn" id="btnTemplatePay2" style="width:100%">📄 Download Template</button></div>
+      </div>
+      <div id="importPayResult" class="muted" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card" data-requires="edit">
+      <h2>➕ Input Pembayaran Manual</h2>
+      <div class="form-grid">
+        <div class="search-wrap" style="grid-column:span 2">
+          <label>Cari Invoice / Pelanggan</label>
+          <input type="text" id="payInvSearch" autocomplete="off" placeholder="ketik no invoice atau nama pelanggan…">
+          <div class="search-results" id="payInvResults"></div>
+          <div id="paySelectedInfo"></div>
+        </div>
+        <div><label>Tanggal Bayar</label><input type="date" id="payDate"></div>
+        <div><label>Jumlah Bayar (Rp)</label><input type="number" id="payAmount" min="1" step="1" placeholder="0"></div>
+        <div><label>Metode</label><select id="payMethod"><option>Transfer</option><option>Tunai</option><option>Giro</option><option>Lainnya</option></select></div>
+        <div><label>Bank / Ref</label><input type="text" id="payRef" placeholder="opsional"></div>
+        <div><button type="button" class="btn green" id="btnAddPay" style="width:100%">Simpan Pembayaran</button></div>
+      </div>
+      <div class="muted" id="payHint" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2>💰 Daftar Piutang (per Invoice)</h2>
+      <p class="muted" style="margin-bottom:8px;font-size:11.5px">Umur = (tgl bayar / hari ini jika belum lunas) − tgl allowance (invoice + 30 hari).</p>
+      <div class="scroll"><table id="tblPiutang">
+        <thead><tr><th>Invoice</th><th>Pelanggan</th><th class="num">Nilai</th><th class="num">Dibayar</th><th class="num">Sisa</th>
+          <th>Status</th><th>Tgl Allowance</th><th>Tgl Bayar</th><th>Umur</th><th class="admin-only">Aksi</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h2>🧾 Riwayat Pembayaran</h2>
+      <div class="scroll"><table id="tblPay">
+        <thead><tr><th>#</th><th>Invoice</th><th>Tanggal</th><th class="num">Jumlah</th><th>Metode</th><th>Bank / Ref / Catatan</th><th class="admin-only">Aksi</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- RINCIAN -->
+  <div class="pane" id="pane-rincian">
+    <div class="card">
+      <h2>💳 Rincian Pembayaran</h2>
+      <div class="tabs sub" id="rincianPeriodTabs">
+        <div class="tab active" data-period="day">Harian</div>
+        <div class="tab" data-period="week">Mingguan</div>
+        <div class="tab" data-period="month">Bulanan</div>
+        <div class="tab" data-period="year">Tahunan</div>
+      </div>
+      <div class="form-grid">
+        <div><label>Dari Tanggal</label><input type="date" id="rinFrom"></div>
+        <div><label>Sampai Tanggal</label><input type="date" id="rinTo"></div>
+        <div><label>Metode Bayar</label><select id="rinMethod"><option value="">Semua Metode</option></select></div>
+      </div>
+      <div class="muted" id="rinSlicerNote" style="margin-top:8px;font-size:11.5px;color:#fcd34d"></div>
+    </div>
+    <div class="card"><h2>📊 Ringkasan Periode</h2><div class="kpis" id="rinKpis"></div>
+      <h2 style="margin-top:18px">💠 Breakdown per Metode</h2><div class="kpis" id="rinByMethod"></div></div>
+    <div class="card"><h2>📈 Grafik per Periode</h2><div class="chart-wrap"><canvas id="chartRincian"></canvas></div></div>
+    <div class="card"><h2>📋 Tabel Rincian</h2><div class="scroll"><table id="tblRincian"><thead id="tblRincianHead"></thead><tbody></tbody></table></div></div>
+  </div>
+
+  <!-- GROUPING -->
+  <div class="pane" id="pane-grouping">
+    <div class="card"><h2>📋 Rekap per Invoice</h2>
+      <div class="scroll"><table id="tblGroupInv">
+        <thead><tr><th>Invoice</th><th>Pelanggan</th><th>Sales</th><th>Tanggal</th><th>Bulan</th><th class="num">Nilai</th><th>Status</th></tr></thead>
+        <tbody></tbody></table></div></div>
+    <div class="grid2">
+      <div class="card"><h2>👥 Per Pelanggan (per Tahun)</h2><div class="scroll"><table id="tblGroupCust"><thead></thead><tbody></tbody></table></div></div>
+      <div class="card"><h2>🧑‍💼 Per Sales (per Tahun)</h2><div class="scroll"><table id="tblGroupSales"><thead></thead><tbody></tbody></table></div></div>
+      <div class="card"><h2>📅 Per Bulan</h2><div class="scroll"><table id="tblGroupMonth"><thead><tr><th>Bulan</th><th class="num">Total</th><th class="num">Invoice</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="card"><h2>📦 Per Produk</h2><div class="scroll"><table id="tblGroupProd"><thead><tr><th>Produk</th><th class="num">Total</th><th class="num">Invoice</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+  </div>
+
+  <!-- AGING -->
+  <div class="pane" id="pane-aging">
+    <div class="card">
+      <h2>⏳ Aging Piutang (lewat allowance 30 hari)</h2>
+      <div class="aging-summary">
+        <div class="kpi"><div class="label">≤ 0 Hari (Allowance)</div><div class="value green" id="agNeg">Rp 0</div></div>
+        <div class="kpi"><div class="label">1–30 Hari Lewat</div><div class="value" id="ag0">Rp 0</div></div>
+        <div class="kpi"><div class="label">31–60 Hari Lewat</div><div class="value" id="ag1">Rp 0</div></div>
+        <div class="kpi"><div class="label">61–90 Hari Lewat</div><div class="value warn" id="ag2">Rp 0</div></div>
+        <div class="kpi"><div class="label">&gt; 90 Hari Lewat</div><div class="value danger" id="ag3">Rp 0</div></div>
+        <div class="kpi"><div class="label">Total Piutang</div><div class="value" id="agTot">Rp 0</div></div>
+      </div>
+      <div class="scroll" style="margin-top:14px"><table id="tblAging">
+        <thead><tr><th>Invoice</th><th>Pelanggan</th><th>Tgl Allowance</th><th class="num">Sisa</th><th class="num">Umur</th><th>Bucket</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+    <div class="card"><h2>🏷️ Aging per Pelanggan</h2><div class="scroll-wide"><table id="tblAgingCust"><thead></thead><tbody></tbody></table></div></div>
+    <div class="card"><h2>🧑‍💼 Aging per Sales</h2><div class="scroll-wide"><table id="tblAgingSales"><thead></thead><tbody></tbody></table></div></div>
+  </div>
+
+  <!-- ADMIN: USER MANAGEMENT -->
+  <div class="pane" id="pane-admin">
+    <div class="card">
+      <h2>➕ Buat User Baru</h2>
+      <p class="muted" style="margin-bottom:10px;font-size:12px">
+        <b>admin</b> = semua akses · <b>sales</b> = input penjualan & pelunasan · <b>viewer</b> = hanya lihat
+      </p>
+      <div class="form-grid">
+        <div><label>Email</label><input type="email" id="newUserEmail" placeholder="user@example.com"></div>
+        <div><label>Password</label><input type="text" id="newUserPass" placeholder="min 6 karakter"></div>
+        <div><label>Role</label><select id="newUserRole">
+          <option value="viewer">Viewer (lihat saja)</option>
+          <option value="sales">Admin Penjualan (input)</option>
+          <option value="admin">Admin (semua)</option>
+        </select></div>
+        <div><button type="button" class="btn green" id="btnCreateUser" style="width:100%">✅ Buat User</button></div>
+      </div>
+      <div class="muted" id="createUserMsg" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2>👥 Daftar User</h2>
+      <div class="scroll"><table id="tblUsers">
+        <thead><tr><th>Email</th><th>Role</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="muted" style="margin-top:10px;font-size:11.5px">
+        ℹ️ <b>Nonaktifkan</b> = profile dihapus, user tidak bisa login lagi. Akun auth tetap ada tapi tidak ada akses.<br>
+        ℹ️ Untuk menghapus akun auth sepenuhnya, gunakan Firebase Console.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   FIREBASE CONFIG — GANTI DENGAN CONFIG ANDA
+============================================================ */
+const firebaseConfig = {
+  apiKey: "PASTE_API_KEY",
+  authDomain: "PASTE_PROJECT.firebaseapp.com",
+  projectId: "PASTE_PROJECT",
+  storageBucket: "PASTE_PROJECT.appspot.com",
+  messagingSenderId: "PASTE_SENDER_ID",
+  appId: "PASTE_APP_ID"
+};
+
+/* GANTI: email admin pertama (harus sama dengan di Firestore Rules) */
+const BOOTSTRAP_ADMIN_EMAIL = 'admin@example.com';
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const fsdb = firebase.firestore();
+fsdb.enablePersistence({synchronizeTabs:true}).catch(e => console.warn('persistence:', e.code));
+
+/* ============================================================
+   STATE
+============================================================ */
+const state = {
+  raw:[], clean:[], payments:[], piutang:[], profiles:[],
+  invMap: new Map(),
+  _outstanding:null, _lastMethodSig:'',
+  _uid:null, _email:null, role:null,
+  _unsubSales:null, _unsubPays:null, _unsubProfiles:null,
+  _bootstrapped:false
+};
+
+const ALLOWANCE_DAYS = 30;
+const MONTH_ORDER = {JAN:1,FEB:2,MAR:3,APR:4,MEI:5,MAY:5,JUN:6,JUL:7,AGU:8,AUG:8,SEP:9,SEPT:9,OKT:10,OCT:10,NOV:11,DES:12,DEC:12};
+const ROLE_LABEL = {admin:'Admin', sales:'Admin Penjualan', viewer:'Viewer'};
+
+/* ============================================================
+   UTIL
+============================================================ */
+const fmtRp = n => 'Rp ' + (Math.round(n||0)).toLocaleString('id-ID');
+const fmtNum = n => (n||0).toLocaleString('id-ID');
+const dateKey = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
+
+function toNum(v){
+  if(v===null||v===undefined||v==='') return 0;
+  if(typeof v==='number') return isFinite(v)?v:0;
+  let s = String(v).trim(); if(!s) return 0;
+  if(s.startsWith('=')) return 0;
+  s = s.replace(/[Rp\s]/gi,'').replace(/[^\d.,-]/g,''); if(!s) return 0;
+  if(s.includes('.') && s.includes(',')){
+    if(s.lastIndexOf('.') < s.lastIndexOf(',')) s = s.replace(/\./g,'').replace(',','.');
+    else s = s.replace(/,/g,'');
+  } else if(s.includes(',')){
+    const p = s.split(',');
+    if(p.length===2 && p[1].length===3 && p[0].length<=3) s = s.replace(/,/g,'');
+    else s = s.replace(',','.');
+  } else if((s.match(/\./g)||[]).length > 1) s = s.replace(/\./g,'');
+  const n = Number(s); return isNaN(n)?0:n;
+}
+function getVal(r, keys){
+  for(let k of keys) if(r[k]!==undefined && r[k]!==null) return toNum(r[k]);
+  const rk = Object.keys(r);
+  for(let k of keys){ const f = rk.find(x => x.trim().toUpperCase()===k.toUpperCase()); if(f && r[f]!=null) return toNum(r[f]); }
+  return 0;
+}
+const MON3 = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,MEI:4,JUN:5,JUL:6,AGU:7,AUG:7,SEP:8,SEPT:8,OCT:9,OKT:9,NOV:10,DEC:11,DES:11};
+function parseDate(v){
+  if(!v) return null;
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==='object' && v.toDate) return v.toDate();
+  if(typeof v==='number'){ const d = XLSX.SSF.parse_date_code(v); return d?new Date(d.y,d.m-1,d.d):null; }
+  const s = String(v).trim(); if(!s) return null;
+  let mm = s.match(/^(\d{1,2})[\s\-\/]([A-Za-z]{3,4})[\s\-\/,]+(\d{2,4})/);
+  if(mm){ const mo = MON3[mm[2].toUpperCase()]; if(mo!==undefined){ let y = Number(mm[3]); if(mm[3].length===2) y = y<50?2000+y:1900+y; return new Date(y,mo,Number(mm[1])); } }
+  mm = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/);
+  if(mm) return new Date(Number(mm[1]), Number(mm[2])-1, Number(mm[3]));
+  let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if(m){ let [_,a,b,c]=m; let y = c.length===2?(Number(c)<50?2000+Number(c):1900+Number(c)):Number(c); return new Date(y,Number(b)-1,Number(a)); }
+  const d = new Date(s); return isNaN(d)?null:d;
+}
+function toast(msg, ms=2400){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._tm); t._tm = setTimeout(()=>t.classList.remove('show'), ms);
+}
+function addDays(d, n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+
+/* ============================================================
+   ROLE HELPERS
+============================================================ */
+const isAdmin = () => state.role === 'admin';
+const canEdit = () => state.role === 'admin' || state.role === 'sales';
+const canView = () => ['admin','sales','viewer'].includes(state.role);
+
+function applyRoleUI(){
+  document.querySelectorAll('[data-requires]').forEach(el => {
+    const req = el.dataset.requires;
+    let show = true;
+    if(req === 'admin') show = isAdmin();
+    else if(req === 'edit') show = canEdit();
+    el.style.display = show ? '' : 'none';
+  });
+  // Kolom aksi tabel
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = canEdit() ? '' : 'none';
+  });
+  // Sembunyikan tombol aksi di tabel piutang/pembayaran untuk viewer
+  document.querySelectorAll('.row-action').forEach(el => {
+    el.style.display = canEdit() ? '' : 'none';
+  });
+  // Info role di header
+  const badge = document.getElementById('authUserRole');
+  if(badge && state.role){
+    badge.className = 'badge role-' + state.role;
+    badge.textContent = ROLE_LABEL[state.role] || state.role;
+  }
+}
+
+/* ============================================================
+   AUTH
+============================================================ */
+const authOverlay = document.getElementById('authOverlay');
+const authErr = document.getElementById('authErr');
+const authUserBox = document.getElementById('authUserBox');
+const authUserEmail = document.getElementById('authUserEmail');
+const syncDot = document.getElementById('syncDot');
+
+function showAuth(){ authOverlay.classList.add('show'); authUserBox.style.display='none'; }
+function hideAuth(){ authOverlay.classList.remove('show'); authUserBox.style.display='inline-flex'; }
+function showAuthError(msg){ authErr.textContent = msg; }
+
+authOverlay.addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('authLogin').click(); });
+
+document.getElementById('authLogin').onclick = async () => {
+  authErr.textContent = '';
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPassword').value;
+  if(!email || !pass){ authErr.textContent = 'Email & password wajib'; return; }
+  try { await auth.signInWithEmailAndPassword(email, pass); }
+  catch(e){ authErr.textContent = e.message; }
+};
+document.getElementById('authRegister').onclick = async () => {
+  authErr.textContent = '';
+  const email = document.getElementById('authEmail').value.trim();
+  const pass = document.getElementById('authPassword').value;
+  if(!email || !pass || pass.length < 6){ authErr.textContent = 'Email & password (min 6) wajib'; return; }
+  if(email.toLowerCase() !== BOOTSTRAP_ADMIN_EMAIL.toLowerCase()){
+    authErr.textContent = 'Hanya email admin yang terdaftar yang bisa mendaftar.';
+    return;
+  }
+  try { await auth.createUserWithEmailAndPassword(email, pass); }
+  catch(e){ authErr.textContent = e.message; }
+};
+document.getElementById('btnLogout').onclick = () => auth.signOut();
+
+auth.onAuthStateChanged(async user => {
+  if(!user){
+    state._uid = null; state.role = null; state._email = null;
+    if(state._unsubSales) state._unsubSales();
+    if(state._unsubPays) state._unsubPays();
+    if(state._unsubProfiles) state._unsubProfiles();
+    state._unsubSales = state._unsubPays = state._unsubProfiles = null;
+    state.clean = []; state.payments = []; state.piutang = []; state.profiles = [];
+    state.invMap.clear();
+    renderAll();
+    showAuth();
+    document.getElementById('statusText').textContent = 'Belum login';
+    return;
+  }
+  try {
+    let profile = null;
+    try {
+      const p = await fsdb.doc(`app/profiles/${user.uid}`).get();
+      if(p.exists) profile = p.data();
+    } catch(e){ console.warn('profile read:', e.message); }
+
+    if(!profile){
+      // Bootstrap admin: email cocok
+      if(user.email && user.email.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase()){
+        try {
+          await fsdb.doc(`app/profiles/${user.uid}`).set({
+            email: user.email, role: 'admin',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          profile = {email: user.email, role: 'admin'};
+        } catch(e){ console.error('bootstrap create fail:', e); }
+      }
+    }
+
+    if(!profile){
+      await auth.signOut();
+      showAuthError('Akun belum terdaftar / dinonaktifkan. Hubungi admin.');
+      return;
+    }
+
+    if(!['admin','sales','viewer'].includes(profile.role)){
+      await auth.signOut();
+      showAuthError('Role tidak valid.');
+      return;
+    }
+
+    state._uid = user.uid;
+    state._email = user.email;
+    state.role = profile.role;
+    authUserEmail.textContent = user.email || user.uid.slice(0,8);
+    hideAuth();
+    applyRoleUI();
+    document.getElementById('statusText').textContent = `Login sebagai ${ROLE_LABEL[state.role]}`;
+    attachRealtimeListeners();
+  } catch(e){
+    console.error(e);
+    showAuthError('Error: ' + e.message);
+  }
+});
+
+/* ============================================================
+   REALTIME LISTENERS
+============================================================ */
+function setSyncState(mode){ syncDot.className = 'sync-dot' + (mode==='live'?' live':mode==='err'?' err':''); }
+
+let _salesT=null, _payT=null;
+function attachRealtimeListeners(){
+  if(!state._uid) return;
+
+  if(state._unsubSales) state._unsubSales();
+  state._unsubSales = fsdb.collection('app/sales').onSnapshot(snap => {
+    setSyncState('live');
+    state.clean = snap.docs.map(doc => {
+      const d = doc.data();
+      return {
+        _id: doc.id, inv: d.inv, custCode: d.custCode||'', custName: d.custName||'',
+        sales: d.sales||'', date: d.date ? d.date.toDate() : null,
+        bulan: d.bulan||'', tahun: d.tahun||'', line: d.line||'', item: d.item||'',
+        jumlah: d.jumlah||0, pcs: d.pcs||0, diskon: d.diskon||0
+      };
+    });
+    rebuildInvMap();
+    clearTimeout(_salesT);
+    _salesT = setTimeout(()=>{ hitungPiutang(); renderActivePane(); updateStatusCount(); }, 80);
+  }, err => { console.error('sales:',err); setSyncState('err'); toast('❌ '+err.message, 4000); });
+
+  if(state._unsubPays) state._unsubPays();
+  state._unsubPays = fsdb.collection('app/payments').onSnapshot(snap => {
+    setSyncState('live');
+    state.payments = snap.docs.map(doc => {
+      const d = doc.data();
+      return { _id: doc.id, id: doc.id, inv: d.inv, date: d.date ? d.date.toDate() : null,
+        amount: d.amount||0, method: d.method||'Transfer', bank: d.bank||'', ref: d.ref||'', catatan: d.catatan||'' };
+    });
+    clearTimeout(_payT);
+    _payT = setTimeout(()=>{ hitungPiutang(); renderActivePane(); updateStatusCount(); }, 80);
+  }, err => { console.error('pays:',err); setSyncState('err'); toast('❌ '+err.message, 4000); });
+
+  // Profiles listener (untuk manajemen user)
+  if(state._unsubProfiles) state._unsubProfiles();
+  if(isAdmin()){
+    state._unsubProfiles = fsdb.collection('app/profiles').onSnapshot(snap => {
+      state.profiles = snap.docs.map(d => ({_id:d.id, ...d.data()}));
+      renderUserTable();
+    }, err => console.warn('profiles:', err.message));
+  }
+}
+
+function updateStatusCount(){
+  if(!state._uid) return;
+  document.getElementById('statusText').textContent =
+    `${fmtNum(state.clean.length)} baris · ${fmtNum(state.invMap.size)} invoice · ${fmtNum(state.payments.length)} pembayaran`;
+}
+function rebuildInvMap(){
+  const map = new Map();
+  for(const r of state.clean){
+    let m = map.get(r.inv);
+    if(!m){ m = {inv:r.inv, custName:r.custName, sales:r.sales, date:r.date,
+      bulan:r.bulan, tahun:r.tahun, total:0, totalDiskon:0}; map.set(r.inv, m); }
+    m.total += r.jumlah; m.totalDiskon += r.diskon;
+  }
+  state.invMap = map;
+}
+
+/* ============================================================
+   USER MANAGEMENT (ADMIN ONLY)
+============================================================ */
+async function adminCreateUser(email, password, role){
+  // Gunakan secondary Firebase App agar sesi admin tidak logout
+  const appName = 'creator-' + Date.now();
+  const secondaryApp = firebase.initializeApp(firebaseConfig, appName);
+  const secAuth = secondaryApp.auth();
+  try {
+    const cred = await secAuth.createUserWithEmailAndPassword(email, password);
+    const uid = cred.user.uid;
+    await secAuth.signOut();
+    // Admin menulis profile (rules: hanya admin yang boleh)
+    await fsdb.doc(`app/profiles/${uid}`).set({
+      email, role,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: state._uid
+    });
+    return uid;
+  } finally {
+    try { await secondaryApp.delete(); } catch(e){}
+  }
+}
+
+document.getElementById('btnCreateUser').onclick = async () => {
+  if(!isAdmin()) return;
+  const email = document.getElementById('newUserEmail').value.trim();
+  const pass = document.getElementById('newUserPass').value;
+  const role = document.getElementById('newUserRole').value;
+  const msg = document.getElementById('createUserMsg');
+  msg.textContent = '';
+  if(!email || !pass || pass.length < 6){ msg.innerHTML = '<span style="color:#fca5a5">Email & password (min 6) wajib</span>'; return; }
+  if(!['admin','sales','viewer'].includes(role)){ msg.innerHTML = '<span style="color:#fca5a5">Role tidak valid</span>'; return; }
+  try {
+    msg.textContent = '⏳ Membuat user…';
+    await adminCreateUser(email, pass, role);
+    msg.innerHTML = `<span style="color:#86efac">✅ User ${email} dibuat sebagai ${ROLE_LABEL[role]}</span>`;
+    document.getElementById('newUserEmail').value = '';
+    document.getElementById('newUserPass').value = '';
+  } catch(e){
+    console.error(e);
+    msg.innerHTML = `<span style="color:#fca5a5">❌ ${e.message}</span>`;
+  }
+};
+
+function renderUserTable(){
+  const tb = document.querySelector('#tblUsers tbody');
+  if(!state.profiles.length){ tb.innerHTML = `<tr><td colspan="4" class="empty">Belum ada user</td></tr>`; return; }
+  tb.innerHTML = state.profiles
+    .sort((a,b) => String(a.email||'').localeCompare(String(b.email||'')))
+    .map(p => {
+      const isMe = p._id === state._uid;
+      const created = p.createdAt?.toDate ? dateKey(p.createdAt.toDate()) : '—';
+      return `<tr>
+        <td>${p.email||'(no email)'} ${isMe?'<span class="muted">(Anda)</span>':''}</td>
+        <td>
+          <select data-uid="${p._id}" class="role-select" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px" ${isMe?'disabled':''}>
+            <option value="viewer" ${p.role==='viewer'?'selected':''}>Viewer</option>
+            <option value="sales" ${p.role==='sales'?'selected':''}>Admin Penjualan</option>
+            <option value="admin" ${p.role==='admin'?'selected':''}>Admin</option>
+          </select>
+        </td>
+        <td>${created}</td>
+        <td>${isMe ? '<span class="muted">—</span>' : `<button class="btn danger" data-deluid="${p._id}" style="padding:3px 8px;font-size:11px">Nonaktifkan</button>`}</td>
+      </tr>`;
+    }).join('');
+
+  tb.querySelectorAll('.role-select').forEach(sel => {
+    sel.onchange = async () => {
+      const uid = sel.dataset.uid;
+      const newRole = sel.value;
+      if(uid === state._uid){ toast('Tidak bisa mengubah role sendiri'); sel.value = state.profiles.find(x=>x._id===uid).role; return; }
+      try { await fsdb.doc(`app/profiles/${uid}`).update({role:newRole}); toast('✅ Role diubah'); }
+      catch(e){ toast('❌ '+e.message, 4000); }
+    };
+  });
+  tb.querySelectorAll('[data-deluid]').forEach(btn => {
+    btn.onclick = async () => {
+      const uid = btn.dataset.deluid;
+      if(uid === state._uid){ toast('Tidak bisa menghapus diri sendiri'); return; }
+      if(!confirm('Nonaktifkan user ini? Mereka tidak akan bisa login lagi.')) return;
+      try { await fsdb.doc(`app/profiles/${uid}`).delete(); toast('User dinonaktifkan'); }
+      catch(e){ toast('❌ '+e.message, 4000); }
+    };
+  });
+}
+
+/* ============================================================
+   IMPORT PENJUALAN
+============================================================ */
+document.getElementById('fileInput').addEventListener('change', e => {
+  const f = e.target.files[0]; if(!f) return;
+  if(!canEdit()){ toast('Akses ditolak'); return; }
+  toast('⏳ Membaca & mengunggah…', 3000);
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, {cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, {defval:null, raw:true});
+      if(!json.length){ toast('File kosong'); return; }
+      const result = processRawToClean(json);
+      if(!result.length){ toast('Tidak ada baris valid'); return; }
+      let mode = 'append';
+      if(state.clean.length){
+        const ok = confirm(`Sudah ada ${state.clean.length} baris.\n\nOK = TAMBAH (append)\nCancel = GANTI SEMUA`);
+        mode = ok ? 'append' : 'replace';
+      }
+      if(mode === 'replace') await fireDeleteAll();
+      await fireBulkWriteSales(result);
+      toast(`✅ ${result.length} baris terkirim`);
+    } catch(err){ console.error(err); toast('❌ '+err.message, 4500); }
+  };
+  reader.readAsArrayBuffer(f);
+  e.target.value = '';
+});
+
+function processRawToClean(rawRows){
+  if(rawRows.length && Object.keys(rawRows[0]).some(k => k !== k.trim())){
+    rawRows = rawRows.map(r => { const o = {}; for(const k in r) o[k.trim()] = r[k]; return o; });
+  }
+  const clean = [];
+  for(const r of rawRows){
+    const sales = String(r['SALES'] ?? '').trim();
+    const noPo = String(r['NO PO'] ?? '').trim().toUpperCase();
+    const harga = toNum(r['HARGA SATUAN']);
+    const jumlah = toNum(r['JUMLAH']);
+    const inv = String(r['INV'] ?? '').trim();
+    if(!inv) continue;
+    if(/^CANC/.test(sales.toUpperCase())) continue;
+    if(noPo.includes('KLAIM') || noPo === 'KONVERSI RETUR') continue;
+    if(!(harga>0) && !(jumlah>0)) continue;
+    const d = parseDate(r['INV DATE']);
+    clean.push({
+      inv, custCode: String(r['CUST CODE'] ?? '').trim(),
+      custName: String(r['CUST NAME'] ?? '').trim(),
+      sales: sales || String(r['CUST NAME'] ?? '').trim(),
+      date: d, bulan: String(r['BULAN'] ?? '').trim(),
+      tahun: String(r['TAHUN'] ?? '').trim(),
+      line: String(r['LINE'] ?? '').trim(),
+      item: String(r['ITEM'] ?? '').trim(), jumlah,
+      pcs: getVal(r, ['PCS','Qty','KUANTITAS']),
+      diskon: getVal(r, ['DISKON','DISCOUNT','POTONGAN'])
+    });
+  }
+  return clean;
+}
+
+async function fireBulkWriteSales(rows){
+  const col = fsdb.collection('app/sales');
+  const CHUNK = 400;
+  for(let i=0; i<rows.length; i+=CHUNK){
+    const batch = fsdb.batch();
+    for(const r of rows.slice(i, i+CHUNK)){
+      const ref = col.doc();
+      batch.set(ref, {
+        inv: r.inv, custCode: r.custCode||'', custName: r.custName||'', sales: r.sales||'',
+        date: r.date ? firebase.firestore.Timestamp.fromDate(r.date) : null,
+        bulan: r.bulan||'', tahun: String(r.tahun||''), line: r.line||'', item: r.item||'',
+        jumlah: r.jumlah||0, pcs: r.pcs||0, diskon: r.diskon||0
+      });
+    }
+    await batch.commit();
+  }
+}
+async function fireDeleteAll(){
+  for(const col of ['app/sales','app/payments']){
+    const snap = await fsdb.collection(col).get();
+    const docs = snap.docs;
+    for(let i=0; i<docs.length; i+=400){
+      const batch = fsdb.batch();
+      docs.slice(i,i+400).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }
+}
+async function fireDeleteInvoice(inv){
+  const salesSnap = await fsdb.collection('app/sales').where('inv','==',inv).get();
+  const paySnap = await fsdb.collection('app/payments').where('inv','==',inv).get();
+  const batch = fsdb.batch();
+  salesSnap.forEach(d => batch.delete(d.ref));
+  paySnap.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+}
+async function fireAddPayment(pay){
+  await fsdb.collection('app/payments').add({
+    inv: pay.inv, date: firebase.firestore.Timestamp.fromDate(pay.date),
+    amount: pay.amount, method: pay.method, bank: pay.bank||'', ref: pay.ref||'', catatan: pay.catatan||''
+  });
+}
+async function fireUpdatePayment(id, patch){
+  const d = {...patch};
+  if(patch.date) d.date = firebase.firestore.Timestamp.fromDate(patch.date);
+  await fsdb.collection('app/payments').doc(id).update(d);
+}
+async function fireDeletePayment(id){
+  await fsdb.collection('app/payments').doc(id).delete();
+}
+
+/* ============================================================
+   PIUTANG
+============================================================ */
+function hitungPiutang(){
+  const paid = new Map(), lastPay = new Map();
+  for(const p of state.payments){
+    paid.set(p.inv, (paid.get(p.inv)||0) + p.amount);
+    const cur = lastPay.get(p.inv);
+    if(p.date && (!cur || p.date > cur)) lastPay.set(p.inv, p.date);
+  }
+  const today = new Date(), msDay = 86400000, list = [];
+  for(const m of state.invMap.values()){
+    const dibayar = paid.get(m.inv)||0;
+    const sisa = m.total - dibayar;
+    const status = sisa<=0.5 ? 'Lunas' : (dibayar>0 ? 'Sebagian' : 'Belum');
+    const allowanceDate = m.date ? new Date(m.date.getTime() + ALLOWANCE_DAYS*msDay) : null;
+    let umur = 0;
+    if(allowanceDate){
+      const ref = (status==='Lunas' && lastPay.get(m.inv)) ? lastPay.get(m.inv) : today;
+      umur = Math.floor((ref - allowanceDate)/msDay);
+    }
+    list.push({inv:m.inv, custName:m.custName, sales:m.sales, date:m.date, bulan:m.bulan,
+      tahun:m.tahun, total:m.total, totalDiskon:m.totalDiskon, dibayar,
+      sisa:Math.max(sisa,0), status, allowanceDate, payDate:lastPay.get(m.inv)||null, umur});
+  }
+  list.sort((a,b)=> b.sisa-a.sisa);
+  state.piutang = list;
+}
+
+/* ============================================================
+   RENDER
+============================================================ */
+function renderAll(){
+  refreshSlicerOptions(); updateSlicerInfo();
+  renderDashboard(); renderPiutang(); renderGrouping(); renderAging(); renderRincian();
+  if(isAdmin()) renderUserTable();
+}
+function renderActivePane(){
+  refreshSlicerOptions();
+  const active = document.querySelector('.pane.active')?.id?.replace('pane-','') || 'dashboard';
+  if(active==='dashboard') renderDashboard();
+  else if(active==='piutang') renderPiutang();
+  else if(active==='rincian') renderRincian();
+  else if(active==='grouping') renderGrouping();
+  else if(active==='aging') renderAging();
+  else if(active==='admin' && isAdmin()) renderUserTable();
+  applyRoleUI();
+}
+
+let chartTren = null;
+function renderDashboard(){
+  const V = getView();
+  const today = new Date();
+  const dateActive = slicerDateActive();
+  let from = null, within, payWithin;
+  if(dateActive){ within = V.clean; payWithin = V.paysByDate; }
+  else {
+    from = new Date(today); from.setDate(from.getDate()-29); from.setHours(0,0,0,0);
+    within = V.clean.filter(r => r.date && r.date>=from && r.date<=today);
+    payWithin = V.paysByDate.filter(p => p.date && p.date>=from && p.date<=today);
+  }
+  document.querySelectorAll('.winLbl').forEach(el => el.textContent = dateActive ? 'Periode Slicer' : '30 Hari');
+
+  const totalAll = V.clean.reduce((s,r)=>s+r.jumlah,0);
+  const piutangAll = V.piutang.reduce((s,p)=>s+p.total,0);
+  const payTotalAll = V.paysByInv.reduce((s,p)=>s+p.amount,0);
+  const selisih = totalAll - payTotalAll;
+  const total30 = within.reduce((s,r)=>s+r.jumlah,0);
+  const payTotal = payWithin.reduce((s,p)=>s+p.amount,0);
+  const invSetAll = new Set(V.clean.map(r=>r.inv));
+  const custSetAll = new Set(V.clean.map(r=>r.custName));
+
+  document.getElementById('kpiTotalAll').textContent = fmtRp(totalAll);
+  document.getElementById('kpiPiutangAll').textContent = fmtRp(piutangAll);
+  document.getElementById('kpiSelisih').textContent = fmtRp(selisih);
+  document.getElementById('kpiInv').textContent = fmtNum(invSetAll.size);
+  document.getElementById('kpiCust').textContent = fmtNum(custSetAll.size);
+  document.getElementById('kpiTotal30').textContent = fmtRp(total30);
+  document.getElementById('kpiPay').textContent = fmtRp(payTotal);
+
+  const selEl = document.getElementById('kpiSelisih');
+  selEl.className = 'value ' + (Math.abs(selisih)<1 ? 'green' : 'warn');
+
+  const infoEl = document.getElementById('rekonInfo');
+  infoEl.innerHTML = state.clean.length
+    ? `ℹ️ <b>Informasi:</b> Penjualan Net ${fmtRp(totalAll)} − Pembayaran ${fmtRp(payTotalAll)} = Selisih ${fmtRp(selisih)}.`
+    : `<span class="muted">Belum ada data. Import penjualan untuk mulai.</span>`;
+
+  const byCust = new Map();
+  within.forEach(r => byCust.set(r.custName, (byCust.get(r.custName)||0)+r.jumlah));
+  fillTable('tblTopCust', [...byCust.entries()].sort((a,b)=>b[1]-a[1]).slice(0,30).map(([n,v],i)=>[i+1,n,fmtRp(v)]), [2]);
+
+  const byProd = new Map();
+  within.forEach(r => byProd.set(r.item, (byProd.get(r.item)||0)+r.jumlah));
+  fillTable('tblTopProd', [...byProd.entries()].sort((a,b)=>b[1]-a[1]).slice(0,30).map(([n,v],i)=>[i+1,n,fmtRp(v)]), [2]);
+
+  const byProdQty = new Map();
+  within.forEach(r => byProdQty.set(r.item, (byProdQty.get(r.item)||0)+r.pcs));
+  fillTable('tblTopInv', [...byProdQty.entries()].sort((a,b)=>b[1]-a[1]).slice(0,30).map(([n,v],i)=>[i+1,n,fmtNum(v)]), [2]);
+
+  const byDiskon = new Map();
+  within.forEach(r => byDiskon.set(r.custName, (byDiskon.get(r.custName)||0)+r.diskon));
+  fillTable('tblTopDay', [...byDiskon.entries()].sort((a,b)=>b[1]-a[1]).slice(0,30).map(([n,v],i)=>[i+1,n,fmtRp(v)]), [2]);
+
+  const penM = new Map(), payM = new Map();
+  let keyFn, labels;
+  if(!dateActive){
+    keyFn = dateKey; labels = [];
+    for(let i=0;i<30;i++){ const d = new Date(from); d.setDate(d.getDate()+i); labels.push(dateKey(d)); }
+    document.getElementById('trenLbl').textContent = 'Harian 30 Hari';
+  } else {
+    const ds = [...within.map(r=>r.date), ...payWithin.map(p=>p.date)].filter(Boolean).map(d=>d.getTime());
+    const span = ds.length ? (Math.max(...ds)-Math.min(...ds))/86400000 : 0;
+    const monthly = span > 62;
+    keyFn = monthly ? (d=>dateKey(d).slice(0,7)) : dateKey;
+    document.getElementById('trenLbl').textContent = monthly ? 'Bulanan (Slicer)' : 'Harian (Slicer)';
+  }
+  within.forEach(r => { if(!r.date) return; const k = keyFn(r.date); penM.set(k, (penM.get(k)||0)+r.jumlah); });
+  payWithin.forEach(p => { if(!p.date) return; const k = keyFn(p.date); payM.set(k, (payM.get(k)||0)+p.amount); });
+  if(dateActive) labels = [...new Set([...penM.keys(), ...payM.keys()])].sort();
+  renderChart(labels.map(k => dateActive ? k : k.slice(5)), labels.map(k=>penM.get(k)||0), labels.map(k=>payM.get(k)||0));
+}
+
+function fillTable(id, rows, numCols){
+  const tb = document.querySelector(`#${id} tbody`);
+  tb.innerHTML = rows.length ? rows.map(r => '<tr>' + r.map((c,i)=>`<td class="${numCols.includes(i)?'num':''}">${c}</td>`).join('') + '</tr>').join('')
+    : `<tr><td colspan="3" class="empty">Belum ada data</td></tr>`;
+}
+
+function renderChart(labels, pen, pay){
+  const cv = document.getElementById('chartTren');
+  if(!cv || !cv.offsetParent) return;
+  if(chartTren){ chartTren.destroy(); chartTren = null; }
+  chartTren = new Chart(cv.getContext('2d'), {
+    type:'line',
+    data:{ labels, datasets:[
+      {label:'Penjualan', data:pen, borderColor:'#38bdf8', backgroundColor:'rgba(56,189,248,.15)', fill:true, tension:.3},
+      {label:'Pembayaran', data:pay, borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,.15)', fill:true, tension:.3}
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#e2e8f0'}}},
+      scales:{x:{ticks:{color:'#94a3b8'}, grid:{color:'#334155'}}, y:{ticks:{color:'#94a3b8'}, grid:{color:'#334155'}}} }
+  });
+}
+
+/* ============================================================
+   PIUTANG RENDER
+============================================================ */
+function umurLabel(u){
+  if(u>0) return `<span class="umur-bad">+${u} hari</span>`;
+  if(u<0) return `<span class="umur-early">${u} hari</span>`;
+  return `<span class="umur-warn">0 hari</span>`;
+}
+
+function renderPiutang(){
+  const V = getView();
+  const tb = document.querySelector('#tblPiutang tbody');
+  tb.innerHTML = V.piutang.length ? V.piutang.map(p => {
+    const actionCell = canEdit()
+      ? `<td class="row-action"><button class="btn danger" data-delinv="${p.inv}" style="padding:3px 8px;font-size:11px" title="Hapus invoice + pembayaran">🗑️</button></td>`
+      : (canEdit()?'':'');
+    return `<tr>
+      <td>${p.inv}</td><td>${p.custName}</td>
+      <td class="num">${fmtRp(p.total)}</td>
+      <td class="num">${fmtRp(p.dibayar)}</td>
+      <td class="num"><b>${fmtRp(p.sisa)}</b></td>
+      <td><span class="badge ${p.status.toLowerCase()}">${p.status}</span></td>
+      <td>${dateKey(p.allowanceDate)}</td>
+      <td>${p.payDate ? dateKey(p.payDate) : '<span class="muted">—</span>'}</td>
+      <td>${umurLabel(p.umur)}</td>
+      ${canEdit()?actionCell:''}
+    </tr>`;
+  }).join('') : `<tr><td colspan="${canEdit()?10:9}" class="empty">Belum ada data</td></tr>`;
+
+  const openInv = state.piutang.filter(p => p.sisa>0.5);
+  if(selectedInv){
+    const p = state.piutang.find(x=>x.inv===selectedInv);
+    if(!p || p.sisa<=0.5){ selectedInv=''; document.getElementById('payInvSearch').value=''; document.getElementById('paySelectedInfo').innerHTML=''; }
+    else pickInv(p);
+  }
+  document.getElementById('payHint').textContent = openInv.length
+    ? `${openInv.length} invoice belum lunas · total sisa ${fmtRp(openInv.reduce((s,p)=>s+p.sisa,0))}`
+    : 'Semua invoice sudah lunas 🎉';
+
+  const tb2 = document.querySelector('#tblPay tbody');
+  tb2.innerHTML = V.paysByInv.length ? V.paysByInv.map((p,i)=>{
+    const action = canEdit()
+      ? `<td class="row-action" style="white-space:nowrap">
+           <button class="btn" data-editpay="${p._id}" style="padding:3px 8px;font-size:11px" title="Edit">✏️</button>
+           <button class="btn danger" data-delpay="${p._id}" style="padding:3px 8px;font-size:11px" title="Hapus">🗑️</button>
+         </td>` : '';
+    return `<tr>
+      <td>${i+1}</td><td>${p.inv}</td>
+      <td>${dateKey(p.date)}</td>
+      <td class="num">${fmtRp(p.amount)}</td>
+      <td>${p.method}</td>
+      <td>${(p.bank?p.bank+' · ':'')}${p.ref||'-'}${p.catatan?' · '+p.catatan:''}</td>
+      ${action}
+    </tr>`;
+  }).join('') : `<tr><td colspan="${canEdit()?7:6}" class="empty">Belum ada pembayaran</td></tr>`;
+}
+
+document.querySelector('#tblPiutang').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-delinv]'); if(!btn) return;
+  if(!canEdit()) return;
+  const inv = btn.dataset.delinv;
+  if(!confirm(`Hapus invoice ${inv} dan SEMUA pembayarannya?`)) return;
+  try { await fireDeleteInvoice(inv); toast('🗑️ Invoice dihapus'); }
+  catch(err){ toast('❌ '+err.message, 4000); }
+});
+
+document.querySelector('#tblPay').addEventListener('click', async e => {
+  if(!canEdit()) return;
+  const eb = e.target.closest('[data-editpay]');
+  const db = e.target.closest('[data-delpay]');
+  if(eb){
+    const p = state.payments.find(x => x._id === eb.dataset.editpay); if(!p) return;
+    document.getElementById('editPayId').value = p._id;
+    document.getElementById('editPayInv').value = p.inv;
+    document.getElementById('editPayDate').value = dateKey(p.date);
+    document.getElementById('editPayAmount').value = p.amount;
+    document.getElementById('editPayMethod').value = p.method;
+    document.getElementById('editPayRef').value = [p.bank,p.ref,p.catatan].filter(Boolean).join(' · ');
+    document.getElementById('editPayModal').classList.add('show');
+    return;
+  }
+  if(db){
+    if(!confirm('Hapus pembayaran ini?')) return;
+    try { await fireDeletePayment(db.dataset.delpay); toast('Pembayaran dihapus'); }
+    catch(err){ toast('❌ '+err.message, 4000); }
+  }
+});
+
+document.getElementById('editPayCancel').onclick = () => document.getElementById('editPayModal').classList.remove('show');
+document.getElementById('editPaySave').onclick = async () => {
+  const id = document.getElementById('editPayId').value;
+  const dateStr = document.getElementById('editPayDate').value;
+  const amount = toNum(document.getElementById('editPayAmount').value);
+  const method = document.getElementById('editPayMethod').value;
+  const refStr = document.getElementById('editPayRef').value.trim();
+  if(!dateStr || !(amount>0)){ toast('Tanggal & jumlah wajib valid'); return; }
+  try {
+    await fireUpdatePayment(id, {date:new Date(dateStr+'T00:00:00'), amount, method, ref:refStr, bank:'', catatan:''});
+    document.getElementById('editPayModal').classList.remove('show');
+    toast('✅ Pembayaran diperbarui');
+  } catch(err){ toast('❌ '+err.message, 4000); }
+};
+
+/* ============================================================
+   SEARCH INVOICE
+============================================================ */
+let selectedInv='', filteredInv=[], activeIdx=-1;
+const getOpenInv = () => state.piutang.filter(p => p.sisa>0.5);
+
+function renderSearchResults(q){
+  const box = document.getElementById('payInvResults');
+  const query = String(q||'').trim().toLowerCase();
+  const list = getOpenInv();
+  filteredInv = query
+    ? list.filter(p => p.inv.toLowerCase().includes(query) || (p.custName||'').toLowerCase().includes(query))
+    : list;
+  if(query) filteredInv.sort((a,b)=>{
+    const ai = a.inv.toLowerCase().startsWith(query)?0:1;
+    const bi = b.inv.toLowerCase().startsWith(query)?0:1;
+    return ai!==bi ? ai-bi : b.sisa-a.sisa;
+  });
+  activeIdx = -1;
+  if(!filteredInv.length){ box.innerHTML = `<div class="search-item muted">Tidak ada invoice</div>`; box.classList.add('show'); return; }
+  box.innerHTML = filteredInv.slice(0,60).map((p,i)=>`
+    <div class="search-item" data-i="${i}">
+      <div><div class="inv">${p.inv}</div><div class="cust">${p.custName||'-'}</div></div>
+      <div class="sisa">${fmtRp(p.sisa)}</div>
+    </div>`).join('');
+  box.classList.add('show');
+  box.querySelectorAll('.search-item[data-i]').forEach(el => {
+    el.onmousedown = e => { e.preventDefault(); pickInv(filteredInv[+el.dataset.i]); };
+  });
+}
+function pickInv(p){
+  if(!p) return;
+  selectedInv = p.inv;
+  const inp = document.getElementById('payInvSearch'); inp.value = p.inv;
+  document.getElementById('payInvResults').classList.remove('show');
+  document.getElementById('paySelectedInfo').innerHTML =
+    `<span class="selected-chip">✅ ${p.inv} · ${p.custName||'-'} · sisa ${fmtRp(p.sisa)} <button type="button" id="clearPick">✕</button></span>`;
+  document.getElementById('clearPick').onclick = () => {
+    selectedInv=''; inp.value=''; document.getElementById('paySelectedInfo').innerHTML='';
+    document.getElementById('payAmount').value=''; inp.focus();
+  };
+  const amt = document.getElementById('payAmount'); amt.max = p.sisa;
+  if(!amt.value) amt.placeholder = String(Math.round(p.sisa));
+}
+const invSearch = document.getElementById('payInvSearch');
+invSearch.addEventListener('input', ()=>{ selectedInv=''; document.getElementById('paySelectedInfo').innerHTML=''; renderSearchResults(invSearch.value); });
+invSearch.addEventListener('focus', ()=>renderSearchResults(invSearch.value));
+invSearch.addEventListener('blur', ()=>setTimeout(()=>document.getElementById('payInvResults').classList.remove('show'), 130));
+invSearch.addEventListener('keydown', e => {
+  const box = document.getElementById('payInvResults');
+  const items = [...box.querySelectorAll('.search-item[data-i]')];
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();
+    if(!box.classList.contains('show')){ renderSearchResults(invSearch.value); return; }
+    if(!items.length) return;
+    activeIdx = e.key==='ArrowDown' ? (activeIdx+1)%items.length : (activeIdx-1+items.length)%items.length;
+    items.forEach((el,i)=>el.classList.toggle('active', i===activeIdx));
+    items[activeIdx].scrollIntoView({block:'nearest'}); return;
+  }
+  if(e.key==='Enter'){
+    e.preventDefault();
+    if(box.classList.contains('show') && activeIdx>=0 && items[activeIdx]) pickInv(filteredInv[activeIdx]);
+    else if(box.classList.contains('show') && items.length===1) pickInv(filteredInv[0]);
+    return;
+  }
+  if(e.key==='Escape') box.classList.remove('show');
+});
+
+/* ============================================================
+   SIMPAN PEMBAYARAN MANUAL
+============================================================ */
+document.getElementById('btnAddPay').onclick = async e => {
+  if(e){ e.preventDefault(); e.stopPropagation(); }
+  if(!canEdit()){ toast('Akses ditolak'); return; }
+  try {
+    let inv = selectedInv;
+    if(!inv){
+      const q = invSearch.value.trim().toLowerCase();
+      const open = getOpenInv();
+      const exact = open.find(p => p.inv.toLowerCase()===q);
+      const fuzzy = open.filter(p => p.inv.toLowerCase().includes(q) || (p.custName||'').toLowerCase().includes(q));
+      if(exact) inv = exact.inv;
+      else if(fuzzy.length===1) inv = fuzzy[0].inv;
+      else { toast(q ? (fuzzy.length?'Pilih invoice dari daftar':'Invoice tidak ditemukan') : 'Cari & pilih invoice dulu'); renderSearchResults(q); invSearch.focus(); return; }
+    }
+    const dateStr = document.getElementById('payDate').value;
+    const amount = toNum(document.getElementById('payAmount').value);
+    const method = document.getElementById('payMethod').value;
+    const ref = document.getElementById('payRef').value.trim();
+    if(!dateStr){ toast('Isi tanggal bayar'); return; }
+    if(!(amount>0)){ toast('Jumlah bayar harus > 0'); return; }
+    const p = state.piutang.find(x => x.inv === inv);
+    if(!p){ toast('Invoice tidak ditemukan'); return; }
+    if(amount > p.sisa+0.5){ toast(`Melebihi sisa (${fmtRp(p.sisa)})`); return; }
+
+    await fireAddPayment({inv, date:new Date(dateStr+'T00:00:00'), amount, method, ref, bank:'', catatan:''});
+    document.getElementById('payAmount').value = '';
+    document.getElementById('payRef').value = '';
+    selectedInv=''; invSearch.value='';
+    document.getElementById('paySelectedInfo').innerHTML = '';
+    toast('✅ Pembayaran disimpan');
+  } catch(err){ console.error(err); toast('❌ '+err.message, 4000); }
+};
+
+/* ============================================================
+   IMPORT PEMBAYARAN
+============================================================ */
+async function handlePayFile(file, reportEl){
+  if(!file){ toast('Pilih file dulu'); return; }
+  if(!canEdit()){ toast('Akses ditolak'); return; }
+  if(!state.clean.length){ toast('⚠️ Import penjualan dulu'); return; }
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, {cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:null, raw:true});
+      if(!rows.length){ toast('File kosong'); return; }
+      const norm = r => { const o={}; for(const k in r) o[String(k).trim().toUpperCase().replace(/\s+/g,'_')] = r[k]; return o; };
+      let ok=0, skipNoInv=0, skipOver=0, skipBad=0;
+      const details = [];
+      const invIndex = new Map(state.piutang.map(p=>[p.inv, p]));
+      const paidNow = new Map();
+      state.payments.forEach(p => paidNow.set(p.inv, (paidNow.get(p.inv)||0)+p.amount));
+      const toWrite = [];
+      for(const raw of rows){
+        const r = norm(raw);
+        const inv = String(r.INV ?? '').trim();
+        const tglRaw = r.TGL_BAYAR;
+        const nominal = toNum(r.JUMLAH_BAYAR);
+        const metode = String(r.METODE ?? 'Transfer').trim() || 'Transfer';
+        const bank = String(r.BANK ?? '').trim();
+        const ref = String(r.NO_REF ?? '').trim();
+        const catatan = String(r.CATATAN ?? '').trim();
+        if(!inv){ skipBad++; continue; }
+        const p = invIndex.get(inv);
+        if(!p){ skipNoInv++; details.push(`INV ${inv} tidak ada`); continue; }
+        const d = parseDate(tglRaw);
+        if(!d){ skipBad++; details.push(`INV ${inv}: tanggal invalid`); continue; }
+        if(!(nominal>0)){ skipBad++; details.push(`INV ${inv}: nominal ≤ 0`); continue; }
+        const sudah = paidNow.get(inv)||0, sisa = p.total - sudah;
+        if(nominal > sisa+0.5){ skipOver++; details.push(`INV ${inv}: ${fmtRp(nominal)} > sisa ${fmtRp(sisa)}`); continue; }
+        toWrite.push({inv, date:d, amount:nominal, method:metode, bank, ref, catatan});
+        paidNow.set(inv, sudah+nominal); ok++;
+      }
+      const col = fsdb.collection('app/payments');
+      for(let i=0; i<toWrite.length; i+=400){
+        const batch = fsdb.batch();
+        toWrite.slice(i,i+400).forEach(p => {
+          const ref = col.doc();
+          batch.set(ref, {inv:p.inv, date:firebase.firestore.Timestamp.fromDate(p.date), amount:p.amount, method:p.method, bank:p.bank, ref:p.ref, catatan:p.catatan});
+        });
+        await batch.commit();
+      }
+      const msg = `✅ Import: ${ok} berhasil, ${skipNoInv} INV tidak ada, ${skipOver} melebihi sisa, ${skipBad} format salah.`;
+      toast(msg, 4000);
+      if(reportEl) reportEl.innerHTML = `<b>${msg}</b>` + (details.length ? `<br><span class="muted">${details.slice(0,15).join('<br>')}${details.length>15?`<br>… (${details.length-15} lainnya)`:''}</span>` : '');
+    } catch(err){ console.error(err); toast('❌ '+err.message, 4500); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+document.getElementById('payFileInput').addEventListener('change', e => {
+  handlePayFile(e.target.files[0], document.getElementById('importPayResult'));
+  e.target.value = '';
+});
+document.getElementById('btnImportPay').onclick = () => {
+  const f = document.getElementById('payFileInput2').files[0];
+  if(!f){ toast('Pilih file dulu'); return; }
+  handlePayFile(f, document.getElementById('importPayResult'));
+};
+
+/* ============================================================
+   RINCIAN PEMBAYARAN
+============================================================ */
+let rincianPeriod = 'day', chartRincian = null;
+function getPeriodKey(date, period){
+  if(!date) return null;
+  const y = date.getFullYear(), m = String(date.getMonth()+1).padStart(2,'0'), d = date.getDate();
+  if(period==='day') return `${y}-${m}-${String(d).padStart(2,'0')}`;
+  if(period==='month') return `${y}-${m}`;
+  if(period==='year') return `${y}`;
+  if(period==='week'){
+    const firstDow = new Date(y, date.getMonth(), 1).getDay();
+    const firstSat = firstDow===6 ? 1 : (7-firstDow);
+    const wn = d<=firstSat ? 1 : 1+Math.ceil((d-firstSat)/7);
+    return `${y}-${m}-W${wn}`;
+  }
+  return `${y}-${m}-${String(d).padStart(2,'0')}`;
+}
+function refreshMethodOptions(){
+  const sel = document.getElementById('rinMethod');
+  const methods = new Set(['Transfer','Tunai','Giro','Lainnya']);
+  state.payments.forEach(p => { if(p.method) methods.add(p.method); });
+  const sig = [...methods].sort().join('|');
+  if(sig === state._lastMethodSig) return;
+  state._lastMethodSig = sig;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Semua Metode</option>' + [...methods].sort().map(m=>`<option>${m}</option>`).join('');
+  if(cur && [...sel.options].some(o=>o.value===cur)) sel.value = cur;
+}
+function renderRincian(){
+  const fromEl = document.getElementById('rinFrom'), toEl = document.getElementById('rinTo');
+  if(!fromEl.value || !toEl.value){
+    const to = new Date(), from = new Date(to); from.setDate(from.getDate()-29);
+    fromEl.value = dateKey(from); toEl.value = dateKey(to);
+  }
+  refreshMethodOptions();
+  const from = new Date(fromEl.value+'T00:00:00'), to = new Date(toEl.value+'T23:59:59');
+  const methodFilter = document.getElementById('rinMethod').value;
+  const dateActive = slicerDateActive();
+  fromEl.disabled = dateActive; toEl.disabled = dateActive;
+  document.getElementById('rinSlicerNote').textContent = dateActive ? '🎚️ Slicer aktif — rentang tanggal dinonaktifkan.' : '';
+  const V = getView();
+  const filtered = V.paysByDate.filter(p => {
+    if(!p.date) return false;
+    if(!dateActive && (p.date<from || p.date>to)) return false;
+    if(methodFilter && p.method !== methodFilter) return false;
+    return true;
+  });
+  const total = filtered.reduce((s,p)=>s+p.amount,0);
+  const count = filtered.length, avg = count ? total/count : 0;
+  document.getElementById('rinKpis').innerHTML = `
+    <div class="kpi"><div class="label">Total Pembayaran</div><div class="value green">${fmtRp(total)}</div></div>
+    <div class="kpi"><div class="label">Jumlah Transaksi</div><div class="value">${fmtNum(count)}</div></div>
+    <div class="kpi"><div class="label">Rata-rata / Transaksi</div><div class="value">${fmtRp(avg)}</div></div>`;
+  const byMethod = new Map();
+  filtered.forEach(p => {
+    const m = p.method || 'Lainnya';
+    if(!byMethod.has(m)) byMethod.set(m,{total:0,count:0});
+    byMethod.get(m).total += p.amount; byMethod.get(m).count++;
+  });
+  document.getElementById('rinByMethod').innerHTML = [...byMethod.entries()].sort((a,b)=>b[1].total-a[1].total).map(([m,v])=>`
+    <div class="kpi"><div class="label">${m}</div><div class="value">${fmtRp(v.total)}</div>
+    <div class="muted" style="font-size:11px;margin-top:2px">${fmtNum(v.count)} trx</div></div>`).join('') || '<div class="muted" style="padding:8px">Tidak ada data</div>';
+  const groups = new Map();
+  filtered.forEach(p => {
+    const k = getPeriodKey(p.date, rincianPeriod); if(!k) return;
+    if(!groups.has(k)) groups.set(k, {total:0,count:0,methods:new Map()});
+    const g = groups.get(k);
+    g.total += p.amount; g.count++;
+    const m = p.method||'Lainnya';
+    g.methods.set(m, (g.methods.get(m)||0)+p.amount);
+  });
+  const keys = [...groups.keys()].sort();
+  const methods = [...byMethod.keys()].sort();
+  document.getElementById('tblRincianHead').innerHTML = `<tr><th>Periode</th>${methods.map(m=>`<th class="num">${m}</th>`).join('')}<th class="num">Total</th><th class="num">Trx</th></tr>`;
+  document.querySelector('#tblRincian tbody').innerHTML = keys.length ? keys.map(k => {
+    const g = groups.get(k);
+    return `<tr><td>${k}</td>${methods.map(m=>`<td class="num">${g.methods.get(m)?fmtRp(g.methods.get(m)):'-'}</td>`).join('')}<td class="num"><b>${fmtRp(g.total)}</b></td><td class="num">${fmtNum(g.count)}</td></tr>`;
+  }).join('') : `<tr><td colspan="${methods.length+3}" class="empty">Tidak ada data</td></tr>`;
+  renderRincianChart(keys, groups, methods);
+}
+function renderRincianChart(keys, groups, methods){
+  const cv = document.getElementById('chartRincian');
+  if(!cv || !cv.offsetParent) return;
+  if(chartRincian){ chartRincian.destroy(); chartRincian = null; }
+  const colors = ['#38bdf8','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316'];
+  const datasets = methods.map((m,i)=>({label:m, data:keys.map(k=>groups.get(k).methods.get(m)||0), backgroundColor:colors[i%colors.length]}));
+  chartRincian = new Chart(cv.getContext('2d'), {
+    type:'bar', data:{labels:keys, datasets},
+    options:{responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#e2e8f0'}}},
+      scales:{x:{stacked:true,ticks:{color:'#94a3b8'},grid:{color:'#334155'}}, y:{stacked:true,ticks:{color:'#94a3b8'},grid:{color:'#334155'}}}}
+  });
+}
+document.querySelectorAll('#rincianPeriodTabs .tab[data-period]').forEach(t=>{
+  t.onclick = ()=>{
+    document.querySelectorAll('#rincianPeriodTabs .tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active'); rincianPeriod = t.dataset.period; renderRincian();
+  };
+});
+let _rinT = null;
+const renderRincianDebounced = () => { clearTimeout(_rinT); _rinT = setTimeout(renderRincian, 120); };
+['rinFrom','rinTo','rinMethod'].forEach(id => document.getElementById(id).addEventListener('change', renderRincianDebounced));
+
+/* ============================================================
+   GROUPING
+============================================================ */
+function renderGrouping(){
+  const V = getView();
+  document.querySelector('#tblGroupInv tbody').innerHTML = V.piutang.map(p=>`
+    <tr><td>${p.inv}</td><td>${p.custName}</td><td>${p.sales}</td>
+    <td>${dateKey(p.date)}</td><td>${p.bulan}</td><td class="num">${fmtRp(p.total)}</td>
+    <td><span class="badge ${p.status.toLowerCase()}">${p.status}</span></td></tr>`).join('') || `<tr><td colspan="7" class="empty">Belum ada data</td></tr>`;
+  renderYearPivot('tblGroupCust', r=>r.custName, 'Pelanggan');
+  renderYearPivot('tblGroupSales', r=>r.sales, 'Sales');
+  const agg = (keyFn) => {
+    const m = new Map();
+    V.clean.forEach(r=>{
+      const k = keyFn(r);
+      if(!m.has(k)) m.set(k, {total:0, invs:new Set()});
+      m.get(k).total += r.jumlah; m.get(k).invs.add(r.inv);
+    });
+    return [...m.entries()].map(([k,v])=>({k, total:v.total, invCount:v.invs.size})).sort((a,b)=>b.total-a.total);
+  };
+  const byMonth = agg(r => `${r.tahun}-${String(r.bulan||'').toUpperCase()}`);
+  byMonth.sort((a,b)=>{
+    const [yA,mA] = String(a.k).split('-'), [yB,mB] = String(b.k).split('-');
+    const yd = (Number(yA)||0) - (Number(yB)||0);
+    return yd !== 0 ? yd : (MONTH_ORDER[mA]||99) - (MONTH_ORDER[mB]||99);
+  });
+  fillGroup('tblGroupMonth', byMonth);
+  fillGroup('tblGroupProd', agg(r=>r.item));
+}
+function renderYearPivot(tableId, keyFn, label){
+  const yearsSet = new Set(); const byEntity = new Map();
+  getView().clean.forEach(r => {
+    const name = keyFn(r) || '-';
+    const y = r.date ? r.date.getFullYear() : (parseInt(r.tahun)||0);
+    if(!byEntity.has(name)) byEntity.set(name, {name, byYear:new Map(), total:0});
+    const e = byEntity.get(name);
+    e.byYear.set(y, (e.byYear.get(y)||0)+r.jumlah);
+    e.total += r.jumlah; if(y) yearsSet.add(y);
+  });
+  const years = [...yearsSet].sort((a,b)=>a-b);
+  const list = [...byEntity.values()].sort((a,b)=>b.total-a.total);
+  const table = document.getElementById(tableId);
+  table.querySelector('thead').innerHTML = `<tr><th>${label}</th>${years.map(y=>`<th class="num">${y}</th>`).join('')}<th class="num">Total</th></tr>`;
+  table.querySelector('tbody').innerHTML = list.length ? list.map(e=>`
+    <tr><td>${e.name}</td>${years.map(y=>`<td class="num">${e.byYear.get(y)?fmtRp(e.byYear.get(y)):'-'}</td>`).join('')}<td class="num"><b>${fmtRp(e.total)}</b></td></tr>
+  `).join('') : `<tr><td colspan="${years.length+2}" class="empty">Belum ada data</td></tr>`;
+}
+function fillGroup(id, rows){
+  document.querySelector(`#${id} tbody`).innerHTML = rows.length ? rows.slice(0,100).map(r=>`
+    <tr><td>${r.k||'-'}</td><td class="num">${fmtRp(r.total)}</td><td class="num">${fmtNum(r.invCount)}</td></tr>
+  `).join('') : `<tr><td colspan="3" class="empty">Belum ada data</td></tr>`;
+}
+
+/* ============================================================
+   AGING
+============================================================ */
+function renderAging(){
+  const rows = getView().piutang.filter(p=>p.sisa>0.5).map(p=>{
+    let bucket;
+    if(p.umur<=0) bucket='allowance';
+    else if(p.umur<=30) bucket='1-30';
+    else if(p.umur<=60) bucket='31-60';
+    else if(p.umur<=90) bucket='61-90';
+    else bucket='>90';
+    return {...p, bucket};
+  });
+  let sNeg=0,s0=0,s1=0,s2=0,s3=0;
+  rows.forEach(r=>{
+    if(r.bucket==='allowance') sNeg+=r.sisa;
+    else if(r.bucket==='1-30') s0+=r.sisa;
+    else if(r.bucket==='31-60') s1+=r.sisa;
+    else if(r.bucket==='61-90') s2+=r.sisa;
+    else s3+=r.sisa;
+  });
+  document.getElementById('agNeg').textContent = fmtRp(sNeg);
+  document.getElementById('ag0').textContent = fmtRp(s0);
+  document.getElementById('ag1').textContent = fmtRp(s1);
+  document.getElementById('ag2').textContent = fmtRp(s2);
+  document.getElementById('ag3').textContent = fmtRp(s3);
+  document.getElementById('agTot').textContent = fmtRp(sNeg+s0+s1+s2+s3);
+  const label = b => ({'allowance':'≤ 0 (allowance)','1-30':'1-30 hari','31-60':'31-60 hari','61-90':'61-90 hari','>90':'> 90 hari'}[b]||b);
+  document.querySelector('#tblAging tbody').innerHTML = rows.length ? rows.map(r=>`
+    <tr><td>${r.inv}</td><td>${r.custName}</td><td>${dateKey(r.allowanceDate)}</td>
+    <td class="num">${fmtRp(r.sisa)}
+	    </td><td class="num">${umurLabel(r.umur)}</td><td>${label(r.bucket)}</td></tr>
+  `).join('') : `<tr><td colspan="6" class="empty">Belum ada piutang</td></tr>`;
+  renderAgingPerEntity('tblAgingCust', p=>p.custName, 'Pelanggan');
+  renderAgingPerEntity('tblAgingSales', p=>p.sales, 'Sales');
+}
+
+function renderAgingPerEntity(tableId, keyFn, label){
+  const outstanding = getView().piutang.filter(p=>p.sisa>0.5);
+  const byEntity = new Map();
+  const monthKeysSet = new Set();
+  for(const p of outstanding){
+    const name = keyFn(p) || '-';
+    const ym = p.date
+      ? `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,'0')}`
+      : `${p.tahun||'?'}-${String(p.bulan||'?').toUpperCase()}`;
+    monthKeysSet.add(ym);
+    let e = byEntity.get(name);
+    if(!e){
+      e = {name, byMonth:new Map(), total:0,
+           buckets:{allowance:0,'1-30':0,'31-60':0,'61-90':0,'>90':0},
+           umurSum:0, umurCount:0, umurMax:-Infinity};
+      byEntity.set(name, e);
+    }
+    e.total += p.sisa;
+    e.byMonth.set(ym, (e.byMonth.get(ym)||0)+p.sisa);
+    const b = p.umur<=0?'allowance':p.umur<=30?'1-30':p.umur<=60?'31-60':p.umur<=90?'61-90':'>90';
+    e.buckets[b] += p.sisa;
+    e.umurSum += p.umur; e.umurCount++;
+    if(p.umur > e.umurMax) e.umurMax = p.umur;
+  }
+  const monthKeys = [...monthKeysSet].sort();
+  const list = [...byEntity.values()].sort((a,b)=>b.total-a.total);
+  const table = document.getElementById(tableId);
+  table.querySelector('thead').innerHTML = `<tr>
+    <th>${label}</th><th class="num">Total Sisa</th>
+    <th class="num">Rata2 Umur</th><th class="num">Umur Maks</th>
+    <th class="num">≤0</th><th class="num">1-30</th><th class="num">31-60</th>
+    <th class="num">61-90</th><th class="num">&gt;90</th>
+    ${monthKeys.map(ym=>`<th class="num">${ym}</th>`).join('')}
+  </tr>`;
+  table.querySelector('tbody').innerHTML = list.length ? list.map(e => {
+    const avgUmur = e.umurCount ? (e.umurSum/e.umurCount).toFixed(1) : '-';
+    const maxUmur = e.umurCount ? e.umurMax : '-';
+    return `<tr>
+      <td>${e.name}</td><td class="num"><b>${fmtRp(e.total)}</b></td>
+      <td class="num">${avgUmur}</td><td class="num">${maxUmur}</td>
+      <td class="num">${e.buckets.allowance?fmtRp(e.buckets.allowance):'-'}</td>
+      <td class="num">${e.buckets['1-30']?fmtRp(e.buckets['1-30']):'-'}</td>
+      <td class="num">${e.buckets['31-60']?fmtRp(e.buckets['31-60']):'-'}</td>
+      <td class="num">${e.buckets['61-90']?fmtRp(e.buckets['61-90']):'-'}</td>
+      <td class="num">${e.buckets['>90']?fmtRp(e.buckets['>90']):'-'}</td>
+      ${monthKeys.map(ym=>`<td class="num">${e.byMonth.get(ym)?fmtRp(e.byMonth.get(ym)):'-'}</td>`).join('')}
+    </tr>`;
+  }).join('') : `<tr><td colspan="${9+monthKeys.length}" class="empty">Belum ada piutang</td></tr>`;
+}
+
+/* ============================================================
+   EXPORT EXCEL
+============================================================ */
+document.getElementById('btnExport').onclick = () => {
+  if(!state.clean.length){ toast('Belum ada data'); return; }
+  const wb = XLSX.utils.book_new();
+  const wsClean = XLSX.utils.json_to_sheet(state.clean.map(r=>({
+    INV:r.inv, 'CUST NAME':r.custName, SALES:r.sales, 'INV DATE':dateKey(r.date),
+    BULAN:r.bulan, TAHUN:r.tahun, LINE:r.line, ITEM:r.item, JUMLAH:r.jumlah,
+    PCS:r.pcs, DISKON:r.diskon
+  })));
+  wsClean['!cols'] = [{wch:14},{wch:26},{wch:18},{wch:12},{wch:8},{wch:8},{wch:14},{wch:36},{wch:14},{wch:8},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsClean, 'PENJUALAN_BERSIH');
+
+  const wsPiutang = XLSX.utils.json_to_sheet(state.piutang.map(p=>({
+    INV:p.inv, 'CUST NAME':p.custName, SALES:p.sales,
+    'INV DATE':dateKey(p.date), 'TGL ALLOWANCE':dateKey(p.allowanceDate),
+    'TGL BAYAR':p.payDate?dateKey(p.payDate):'',
+    'NILAI INVOICE':p.total, 'TOTAL BAYAR':p.dibayar, SISA:p.sisa,
+    STATUS:p.status, UMUR:p.umur
+  })));
+  wsPiutang['!cols'] = [{wch:14},{wch:26},{wch:18},{wch:12},{wch:13},{wch:12},{wch:16},{wch:16},{wch:16},{wch:12},{wch:8}];
+  XLSX.utils.book_append_sheet(wb, wsPiutang, 'PIUTANG');
+
+  const wsPay = XLSX.utils.json_to_sheet(state.payments.map(p=>({
+    INV:p.inv, TGL_BAYAR:dateKey(p.date), JUMLAH_BAYAR:p.amount,
+    METODE:p.method, BANK:p.bank||'', NO_REF:p.ref||'', CATATAN:p.catatan||''
+  })));
+  wsPay['!cols'] = [{wch:14},{wch:12},{wch:14},{wch:12},{wch:12},{wch:16},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, wsPay, 'PEMBAYARAN');
+
+  XLSX.writeFile(wb, `Penjualan2026_${dateKey(new Date())}.xlsx`);
+  toast('💾 File Excel diunduh');
+};
+
+document.getElementById('btnExportPay').onclick = () => {
+  if(!state.payments.length){ toast('Belum ada pembayaran'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(state.payments.map(p=>({
+    INV:p.inv, TGL_BAYAR:dateKey(p.date), JUMLAH_BAYAR:p.amount,
+    METODE:p.method, BANK:p.bank||'', NO_REF:p.ref||'', CATATAN:p.catatan||''
+  })));
+  ws['!cols'] = [{wch:14},{wch:12},{wch:14},{wch:12},{wch:12},{wch:16},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, ws, 'PEMBAYARAN');
+  XLSX.writeFile(wb, `Pembayaran_${dateKey(new Date())}.xlsx`);
+  toast('💳 File diunduh');
+};
+
+/* ============================================================
+   TEMPLATE PEMBAYARAN
+============================================================ */
+function downloadPayTemplate(){
+  const wb = XLSX.utils.book_new();
+  const data = [{INV:'26000001', TGL_BAYAR:'2026-01-05', JUMLAH_BAYAR:100000,
+    METODE:'Transfer', BANK:'BCA', NO_REF:'TRX-001', CATATAN:'contoh'}];
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:14},{wch:12},{wch:14},{wch:12},{wch:12},{wch:16},{wch:24}];
+  const guide = XLSX.utils.aoa_to_sheet([
+    ['PETUNJUK IMPORT PEMBAYARAN'],[''],
+    ['1. Kolom wajib: INV, TGL_BAYAR, JUMLAH_BAYAR'],
+    ['2. Opsional: METODE, BANK, NO_REF, CATATAN'],
+    ['3. Format tanggal: YYYY-MM-DD atau DD/MM/YYYY'],
+    ['4. INV harus ada di data penjualan'],
+    ['5. JUMLAH_BAYAR ≤ sisa piutang'],[''],
+    ['Contoh:'],
+    ['INV','TGL_BAYAR','JUMLAH_BAYAR','METODE','BANK','NO_REF','CATATAN'],
+    ['26000001','2026-01-05',100000,'Transfer','BCA','TRX-001',''],
+    ['26000001','2026-01-20',50000,'Tunai','','','cicilan ke-2']
+  ]);
+  guide['!cols'] = [{wch:22},{wch:16},{wch:16},{wch:12},{wch:12},{wch:16},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, ws, 'PEMBAYARAN');
+  XLSX.utils.book_append_sheet(wb, guide, 'PETUNJUK');
+  XLSX.writeFile(wb, 'Template_Pembayaran.xlsx');
+  toast('📄 Template diunduh');
+}
+document.getElementById('btnTemplatePay').onclick = downloadPayTemplate;
+document.getElementById('btnTemplatePay2').onclick = downloadPayTemplate;
+
+/* ============================================================
+   JSON SAVE/RESTORE (backup lokal)
+============================================================ */
+document.getElementById('btnSaveJson').onclick = () => {
+  if(!state.clean.length && !state.payments.length){ toast('Belum ada data'); return; }
+  const payload = {
+    v:3, savedAt:new Date().toISOString(),
+    clean: state.clean.map(r=>({...r, _id:undefined, date:r.date?r.date.toISOString():null})),
+    payments: state.payments.map(p=>({...p, _id:undefined, id:undefined, date:p.date?p.date.toISOString():null}))
+  };
+  const blob = new Blob([JSON.stringify(payload)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Penjualan2026_${dateKey(new Date())}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('💾 JSON backup diunduh');
+};
+
+document.getElementById('jsonFileInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; if(!f) return;
+  if(!isAdmin()){ toast('Hanya admin yang bisa restore'); e.target.value=''; return; }
+  try {
+    const obj = JSON.parse(await f.text());
+    const d = s => s ? new Date(s) : null;
+    const clean = (obj.clean||[]).map(r=>({
+      inv:r.inv, custCode:r.custCode||'', custName:r.custName||'', sales:r.sales||'',
+      date:d(r.date), bulan:r.bulan||'', tahun:r.tahun||'', line:r.line||'', item:r.item||'',
+      jumlah:r.jumlah||0, pcs:r.pcs||0, diskon:r.diskon||0
+    })).filter(r=>r.inv);
+    const pays = (obj.payments||[]).map(p=>({
+      inv:p.inv, date:d(p.date), amount:p.amount||0, method:p.method||'Transfer',
+      bank:p.bank||'', ref:p.ref||'', catatan:p.catatan||''
+    })).filter(p=>p.inv && p.date);
+    if(!clean.length && !pays.length){ toast('JSON kosong'); return; }
+    const mode = confirm(`JSON berisi ${clean.length} baris + ${pays.length} pembayaran.\n\nOK = TAMBAH\nCancel = GANTI SEMUA`);
+    if(!mode) await fireDeleteAll();
+    if(clean.length) await fireBulkWriteSales(clean);
+    if(pays.length){
+      const col = fsdb.collection('app/payments');
+      for(let i=0; i<pays.length; i+=400){
+        const batch = fsdb.batch();
+        pays.slice(i,i+400).forEach(p=>{
+          const ref = col.doc();
+          batch.set(ref, {inv:p.inv, date:firebase.firestore.Timestamp.fromDate(p.date),
+            amount:p.amount, method:p.method, bank:p.bank, ref:p.ref, catatan:p.catatan});
+        });
+        await batch.commit();
+      }
+    }
+    toast(`📂 Restore sukses (${clean.length} baris + ${pays.length} bayar)`, 3500);
+  } catch(err){ toast('❌ '+err.message, 4500); }
+  e.target.value = '';
+});
+
+/* ============================================================
+   RESET (admin only)
+============================================================ */
+document.getElementById('btnReset').onclick = async () => {
+  if(!isAdmin()){ toast('Hanya admin'); return; }
+  if(!confirm('Reset SEMUA data (sales + payments) dari Firestore? Tidak bisa dibatalkan.')) return;
+  try {
+    await fireDeleteAll();
+    selectedInv = '';
+    document.getElementById('payInvSearch').value = '';
+    document.getElementById('paySelectedInfo').innerHTML = '';
+    document.getElementById('payInvResults').classList.remove('show');
+    toast('Data cloud direset');
+  } catch(err){ toast('❌ '+err.message, 4000); }
+};
+
+/* ============================================================
+   SAMPLE DATA (admin only)
+============================================================ */
+document.getElementById('btnSample').onclick = async () => {
+  if(!isAdmin()){ toast('Hanya admin'); return; }
+  const today = new Date();
+  const mk = (i) => { const d = new Date(today); d.setDate(d.getDate()-(i*2)); return d; };
+  const samples = [];
+  const custs = ['BOBBY','TRI WIDYASTUTI','NOVAN','EVI UDAYANI','ADIE NUGROHO','M FAIZAL','ITA NOVIANTI'];
+  const prods = ['FRES CLASSIC-FRAMBOZEN B1 Dus','FRES ELG FRAMBOZEN NF B1','BALI-FRAMBOZEN CAR ISI','FRES CLS MELON 380ML','FRES PREMHORECA-LECI'];
+  let invNo = 26000001;
+  for(let i=0;i<400;i++){
+    const c = custs[i%custs.length];
+    const d = mk(i);
+    const isCancel = (i%37===0), isKlaim = (i%29===0);
+    const qty = 1+(i%6);
+    const harga = [20962,16749,15288,13063,58559][i%5];
+    samples.push({
+      inv: String(invNo + Math.floor(i/3)),
+      custCode: '3001'+(1000+(i%7)), custName: c,
+      sales: isCancel ? 'CANCEL INVOICE' : c,
+      date: d, bulan: d.toLocaleString('id-ID',{month:'short'}).toUpperCase(),
+      tahun: String(d.getFullYear()),
+      line: ['CLASSIC','ELEGANCE','PUTRI BALI','PET 380ML','PREMIUM'][i%5],
+      item: prods[i%prods.length], jumlah: qty*harga, pcs: qty*6,
+      diskon: Math.floor(Math.random()*20000),
+      _skip: isCancel || isKlaim
+    });
+  }
+  const valid = samples.filter(s => !s._skip).map(s => { delete s._skip; return s; });
+  try {
+    if(!confirm(`Muat ${valid.length} baris contoh ke Firestore?`)) return;
+    toast('⏳ Mengunggah contoh…', 3000);
+    await fireBulkWriteSales(valid);
+    // Contoh pembayaran
+    const payCol = fsdb.collection('app/payments');
+    const batches = [];
+    let b = fsdb.batch(), cnt = 0;
+    state.piutang.forEach((p, idx) => {
+      let payDate, amount;
+      if(idx%3===0){ payDate = addDays(p.date, 15+(idx%40)); amount = p.total; }
+      else if(idx%3===1){ payDate = addDays(p.date, 20+(idx%30)); amount = Math.round(p.total*0.4); }
+      else return;
+      if(payDate > today) return;
+      const ref = payCol.doc();
+      b.set(ref, {inv:p.inv, date:firebase.firestore.Timestamp.fromDate(payDate), amount,
+        method:['Transfer','Tunai','Giro','Lainnya'][idx%4], bank:'', ref:'', catatan:''});
+      cnt++;
+      if(cnt>=400){ batches.push(b); b = fsdb.batch(); cnt = 0; }
+    });
+    if(cnt > 0) batches.push(b);
+    for(const bb of batches) await bb.commit();
+    toast('✅ Contoh data + pembayaran terkirim', 3500);
+  } catch(err){ toast('❌ '+err.message, 4500); }
+};
+
+/* ============================================================
+   SLICER
+============================================================ */
+const SL = {tahun:'', bulan:'', minggu:'', sales:'', cust:''};
+const BULAN_NAMA = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+function weekOfMonth(date){
+  const d = date.getDate();
+  const firstDow = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  const firstSat = firstDow===6 ? 1 : (7-firstDow);
+  return d<=firstSat ? 1 : 1+Math.ceil((d-firstSat)/7);
+}
+function slicerDateActive(){ return !!(SL.tahun || SL.bulan || SL.minggu); }
+function datePass(d, tahunStr, bulanStr){
+  if(!slicerDateActive()) return true;
+  let y, m, w = null;
+  if(d){ y = d.getFullYear(); m = d.getMonth()+1; w = weekOfMonth(d); }
+  else { y = parseInt(tahunStr)||0; m = MONTH_ORDER[String(bulanStr||'').trim().toUpperCase()]||0; }
+  if(SL.tahun && y !== Number(SL.tahun)) return false;
+  if(SL.bulan && m !== Number(SL.bulan)) return false;
+  if(SL.minggu && w !== Number(SL.minggu)) return false;
+  return true;
+}
+function entityPass(sales, cust){
+  if(SL.sales && !String(sales||'').toUpperCase().includes(SL.sales.toUpperCase())) return false;
+  if(SL.cust && !String(cust||'').toUpperCase().includes(SL.cust.toUpperCase())) return false;
+  return true;
+}
+function getView(){
+  const clean = state.clean.filter(r => datePass(r.date, r.tahun, r.bulan) && entityPass(r.sales, r.custName));
+  const piutang = state.piutang.filter(p => datePass(p.date, p.tahun, p.bulan) && entityPass(p.sales, p.custName));
+  const invSet = new Set(piutang.map(p => p.inv));
+  const paysByInv = state.payments.filter(p => invSet.has(p.inv));
+  const paysByDate = state.payments.filter(p => {
+    const m = state.invMap.get(p.inv);
+    return datePass(p.date, '', '') && entityPass(m?m.sales:'', m?m.custName:'');
+  });
+  return {clean, piutang, paysByInv, paysByDate};
+}
+
+let _slSig = '';
+function refreshSlicerOptions(){
+  const years = new Set(), sales = new Set(), custs = new Set();
+  for(const r of state.clean){
+    const y = r.date ? r.date.getFullYear() : (parseInt(r.tahun)||0);
+    if(y) years.add(y);
+    if(r.sales) sales.add(r.sales);
+    if(r.custName) custs.add(r.custName);
+  }
+  const sig = [...years].sort().join(',')+'|'+sales.size+'|'+custs.size+'|'+state.clean.length;
+  if(sig === _slSig) return;
+  _slSig = sig;
+  const selY = document.getElementById('slTahun');
+  const cur = SL.tahun;
+  selY.innerHTML = '<option value="">Semua Tahun</option>' +
+    [...years].sort((a,b)=>a-b).map(y=>`<option value="${y}">${y}</option>`).join('');
+  selY.value = [...years].map(String).includes(cur) ? cur : '';
+  SL.tahun = selY.value;
+  const opt = s => `<option value="${String(s).replace(/"/g,'&quot;')}"></option>`;
+  document.getElementById('dlSales').innerHTML = [...sales].sort().map(opt).join('');
+  document.getElementById('dlCust').innerHTML = [...custs].sort().map(opt).join('');
+}
+
+function updateSlicerInfo(){
+  const el = document.getElementById('slInfo'); if(!el) return;
+  const act = [];
+  if(SL.tahun) act.push('Tahun '+SL.tahun);
+  if(SL.bulan) act.push(BULAN_NAMA[Number(SL.bulan)-1]);
+  if(SL.minggu) act.push('Minggu '+SL.minggu);
+  if(SL.sales) act.push('Sales: '+SL.sales);
+  if(SL.cust) act.push('Pelanggan: '+SL.cust);
+  ['slTahun','slBulan','slMinggu','slSales','slCust'].forEach((id,i)=>{
+    const key = ['tahun','bulan','minggu','sales','cust'][i];
+    document.getElementById(id).classList.toggle('on', !!SL[key]);
+  });
+  if(!act.length){
+    el.textContent = state.clean.length
+      ? `Tanpa filter · ${fmtNum(state.clean.length)} baris` : 'Tanpa filter';
+    return;
+  }
+  const V = getView();
+  const invN = new Set(V.clean.map(r=>r.inv)).size;
+  el.textContent = `Filter aktif: ${act.join(' · ')} → ${fmtNum(V.clean.length)} dari ${fmtNum(state.clean.length)} baris · ${fmtNum(invN)} invoice`;
+}
+
+function applySlicers(){
+  SL.tahun = document.getElementById('slTahun').value;
+  SL.bulan = document.getElementById('slBulan').value;
+  SL.minggu = document.getElementById('slMinggu').value;
+  SL.sales = document.getElementById('slSales').value.trim();
+  SL.cust = document.getElementById('slCust').value.trim();
+  updateSlicerInfo();
+  renderActivePane();
+}
+['slTahun','slBulan','slMinggu'].forEach(id => document.getElementById(id).addEventListener('change', applySlicers));
+let _slT = null;
+['slSales','slCust'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', ()=>{ clearTimeout(_slT); _slT = setTimeout(applySlicers, 220); });
+  el.addEventListener('change', applySlicers);
+});
+document.getElementById('btnSlReset').onclick = () => {
+  ['slTahun','slBulan','slMinggu','slSales','slCust'].forEach(id => document.getElementById(id).value = '');
+  applySlicers();
+};
+
+/* ============================================================
+   TABS
+============================================================ */
+document.querySelectorAll('.tab[data-pane]').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab[data-pane]').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('pane-'+t.dataset.pane).classList.add('active');
+    renderActivePane();
+  };
+});
+
+/* ============================================================
+   INIT
+============================================================ */
+document.getElementById('payDate').value = dateKey(new Date());
+renderAll();
+applyRoleUI();
+showAuth();
+</script>
+</body>
+</html>

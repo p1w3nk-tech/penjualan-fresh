@@ -420,6 +420,7 @@ const firebaseConfig = {
 const BOOTSTRAP_ADMIN_USERNAME = 'admin';
 const FAKE_EMAIL_DOMAIN = '@dashboard.local'; // Domain rahasia untuk Firebase Auth
 
+if(location.protocol==='file:') console.warn('Buka lewat http://localhost atau hosting, Firebase Auth tidak jalan di file://');
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const fsdb = firebase.firestore();
@@ -532,6 +533,22 @@ const authUserBox = document.getElementById('authUserBox');
 const authUserEmail = document.getElementById('authUserEmail');
 const syncDot = document.getElementById('syncDot');
 
+function authMsg(e){
+  const c = e && e.code || '';
+  const map = {
+    'auth/operation-not-allowed':'Metode Email/Password belum diaktifkan di Firebase Console (Authentication > Sign-in method).',
+    'auth/configuration-not-found':'Firebase Authentication belum diaktifkan. Klik "Get started" di Firebase Console > Authentication.',
+    'auth/invalid-api-key':'API key Firebase tidak valid. Cek firebaseConfig.',
+    'auth/api-key-not-valid.-please-pass-a-valid-api-key.':'API key Firebase tidak valid. Cek firebaseConfig.',
+    'auth/unauthorized-domain':'Domain ini belum diizinkan. Tambahkan di Firebase Console > Authentication > Settings > Authorized domains.',
+    'auth/network-request-failed':'Koneksi ke Firebase gagal. Cek internet / adblock.',
+    'auth/weak-password':'Password terlalu lemah (min 6 karakter).',
+    'auth/too-many-requests':'Terlalu banyak percobaan. Tunggu beberapa menit.',
+    'auth/operation-not-supported-in-this-environment':'Halaman harus dibuka lewat http(s) atau localhost, bukan file://.',
+    'auth/invalid-email':'Format username tidak valid (pakai huruf/angka tanpa spasi).'
+  };
+  return map[c] || ((c?c+': ':'') + (e && e.message || e));
+}
 function showAuth(){ authOverlay.classList.add('show'); authUserBox.style.display='none'; }
 function hideAuth(){ authOverlay.classList.remove('show'); authUserBox.style.display='inline-flex'; }
 function showAuthError(msg){ authErr.textContent = msg; }
@@ -550,7 +567,7 @@ document.getElementById('authLogin').onclick = async () => {
     if(e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
       authErr.textContent = 'Username atau Password salah.';
     } else {
-      authErr.textContent = e.message; 
+      authErr.textContent = authMsg(e); 
     }
   }
 };
@@ -573,7 +590,7 @@ document.getElementById('authRegister').onclick = async () => {
     if(e.code === 'auth/email-already-in-use') {
       authErr.textContent = 'Username sudah dipakai. Silakan klik Masuk.';
     } else {
-      authErr.textContent = e.message; 
+      authErr.textContent = authMsg(e); 
     }
   }
 };
@@ -600,7 +617,7 @@ auth.onAuthStateChanged(async user => {
   try {
     let profile = null;
     try {
-      const p = await fsdb.doc(`app/profiles/${user.uid}`).get();
+      const p = await fsdb.doc(`profiles/${user.uid}`).get();
       if(p.exists) profile = p.data();
     } catch(e){ console.warn('profile read:', e.message); }
 
@@ -608,12 +625,17 @@ auth.onAuthStateChanged(async user => {
       // Bootstrap admin: cek apakah username cocok
       if(userUsername === BOOTSTRAP_ADMIN_USERNAME.toLowerCase()){
         try {
-          await fsdb.doc(`app/profiles/${user.uid}`).set({
+          await fsdb.doc(`profiles/${user.uid}`).set({
             email: userUsername, role: 'admin',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
           profile = {email: userUsername, role: 'admin'};
-        } catch(e){ console.error('bootstrap create fail:', e); }
+        } catch(e){
+          console.error('bootstrap create fail:', e);
+          await auth.signOut();
+          showAuthError('Gagal membuat profil admin: ' + e.message + ' — cek Firestore Rules (lihat panduan).');
+          return;
+        }
       }
     }
 
@@ -640,7 +662,7 @@ auth.onAuthStateChanged(async user => {
     attachRealtimeListeners();
   } catch(e){
     console.error(e);
-    showAuthError('Error: ' + e.message);
+    showAuthError('Error: ' + authMsg(e));
   }
 });
 
@@ -654,7 +676,7 @@ function attachRealtimeListeners(){
   if(!state._uid) return;
 
   if(state._unsubSales) state._unsubSales();
-  state._unsubSales = fsdb.collection('app/sales').onSnapshot(snap => {
+  state._unsubSales = fsdb.collection('sales').onSnapshot(snap => {
     setSyncState('live');
     state.clean = snap.docs.map(doc => {
       const d = doc.data();
@@ -671,7 +693,7 @@ function attachRealtimeListeners(){
   }, err => { console.error('sales:',err); setSyncState('err'); toast('❌ '+err.message, 4000); });
 
   if(state._unsubPays) state._unsubPays();
-  state._unsubPays = fsdb.collection('app/payments').onSnapshot(snap => {
+  state._unsubPays = fsdb.collection('payments').onSnapshot(snap => {
     setSyncState('live');
     state.payments = snap.docs.map(doc => {
       const d = doc.data();
@@ -685,7 +707,7 @@ function attachRealtimeListeners(){
   // Profiles listener (untuk manajemen user)
   if(state._unsubProfiles) state._unsubProfiles();
   if(isAdmin()){
-    state._unsubProfiles = fsdb.collection('app/profiles').onSnapshot(snap => {
+    state._unsubProfiles = fsdb.collection('profiles').onSnapshot(snap => {
       state.profiles = snap.docs.map(d => ({_id:d.id, ...d.data()}));
       renderUserTable();
     }, err => console.warn('profiles:', err.message));
@@ -722,7 +744,7 @@ async function adminCreateUser(username, password, role){
     await cred.user.updateProfile({ displayName: username });
     await secAuth.signOut();
     // Admin menulis profile (rules: hanya admin yang boleh)
-    await fsdb.doc(`app/profiles/${uid}`).set({
+    await fsdb.doc(`profiles/${uid}`).set({
       email: username, role,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdBy: state._uid
@@ -788,7 +810,7 @@ function renderUserTable(){
       const uid = sel.dataset.uid;
       const newRole = sel.value;
       if(uid === state._uid){ toast('Tidak bisa mengubah role sendiri'); sel.value = state.profiles.find(x=>x._id===uid).role; return; }
-      try { await fsdb.doc(`app/profiles/${uid}`).update({role:newRole}); toast('✅ Role diubah'); }
+      try { await fsdb.doc(`profiles/${uid}`).update({role:newRole}); toast('✅ Role diubah'); }
       catch(e){ toast('❌ '+e.message, 4000); }
     };
   });
@@ -797,7 +819,7 @@ function renderUserTable(){
       const uid = btn.dataset.deluid;
       if(uid === state._uid){ toast('Tidak bisa menghapus diri sendiri'); return; }
       if(!confirm('Nonaktifkan user ini? Mereka tidak akan bisa login lagi.')) return;
-      try { await fsdb.doc(`app/profiles/${uid}`).delete(); toast('User dinonaktifkan'); }
+      try { await fsdb.doc(`profiles/${uid}`).delete(); toast('User dinonaktifkan'); }
       catch(e){ toast('❌ '+e.message, 4000); }
     };
   });
@@ -865,7 +887,7 @@ function processRawToClean(rawRows){
 }
 
 async function fireBulkWriteSales(rows){
-  const col = fsdb.collection('app/sales');
+  const col = fsdb.collection('sales');
   const CHUNK = 400;
   for(let i=0; i<rows.length; i+=CHUNK){
     const batch = fsdb.batch();
@@ -882,7 +904,7 @@ async function fireBulkWriteSales(rows){
   }
 }
 async function fireDeleteAll(){
-  for(const col of ['app/sales','app/payments']){
+  for(const col of ['sales','payments']){
     const snap = await fsdb.collection(col).get();
     const docs = snap.docs;
     for(let i=0; i<docs.length; i+=400){
@@ -893,15 +915,15 @@ async function fireDeleteAll(){
   }
 }
 async function fireDeleteInvoice(inv){
-  const salesSnap = await fsdb.collection('app/sales').where('inv','==',inv).get();
-  const paySnap = await fsdb.collection('app/payments').where('inv','==',inv).get();
+  const salesSnap = await fsdb.collection('sales').where('inv','==',inv).get();
+  const paySnap = await fsdb.collection('payments').where('inv','==',inv).get();
   const batch = fsdb.batch();
   salesSnap.forEach(d => batch.delete(d.ref));
   paySnap.forEach(d => batch.delete(d.ref));
   await batch.commit();
 }
 async function fireAddPayment(pay){
-  await fsdb.collection('app/payments').add({
+  await fsdb.collection('payments').add({
     inv: pay.inv, date: firebase.firestore.Timestamp.fromDate(pay.date),
     amount: pay.amount, method: pay.method, bank: pay.bank||'', ref: pay.ref||'', catatan: pay.catatan||''
   });
@@ -909,10 +931,10 @@ async function fireAddPayment(pay){
 async function fireUpdatePayment(id, patch){
   const d = {...patch};
   if(patch.date) d.date = firebase.firestore.Timestamp.fromDate(patch.date);
-  await fsdb.collection('app/payments').doc(id).update(d);
+  await fsdb.collection('payments').doc(id).update(d);
 }
 async function fireDeletePayment(id){
-  await fsdb.collection('app/payments').doc(id).delete();
+  await fsdb.collection('payments').doc(id).delete();
 }
 
 /* ============================================================
@@ -1308,7 +1330,7 @@ async function handlePayFile(file, reportEl){
         toWrite.push({inv, date:d, amount:nominal, method:metode, bank, ref, catatan});
         paidNow.set(inv, sudah+nominal); ok++;
       }
-      const col = fsdb.collection('app/payments');
+      const col = fsdb.collection('payments');
       for(let i=0; i<toWrite.length; i+=400){
         const batch = fsdb.batch();
         toWrite.slice(i,i+400).forEach(p => {
@@ -1694,7 +1716,7 @@ document.getElementById('jsonFileInput').addEventListener('change', async e => {
     if(!mode) await fireDeleteAll();
     if(clean.length) await fireBulkWriteSales(clean);
     if(pays.length){
-      const col = fsdb.collection('app/payments');
+      const col = fsdb.collection('payments');
       for(let i=0; i<pays.length; i+=400){
         const batch = fsdb.batch();
         pays.slice(i,i+400).forEach(p=>{
@@ -1761,7 +1783,7 @@ document.getElementById('btnSample').onclick = async () => {
     toast('⏳ Mengunggah contoh…', 3000);
     await fireBulkWriteSales(valid);
     // Contoh pembayaran
-    const payCol = fsdb.collection('app/payments');
+    const payCol = fsdb.collection('payments');
     const batches = [];
     let b = fsdb.batch(), cnt = 0;
     state.piutang.forEach((p, idx) => {

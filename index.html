@@ -126,15 +126,15 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <div class="auth-card">
     <h2>🔐 Login Dashboard</h2>
     <p class="sub">Masuk untuk mengakses data penjualan</p>
-    <input type="email" id="authEmail" placeholder="Email" autocomplete="email">
-    <input type="password" id="authPassword" placeholder="Password (min 6 karakter)" autocomplete="current-password">
+    <input type="text" id="authUsername" placeholder="Username" autocomplete="off">
+    <input type="password" id="authPassword" placeholder="Password (min 6 karakter)" autocomplete="new-password">
     <div class="row">
       <button class="btn primary" id="authLogin">Masuk</button>
       <button class="btn" id="authRegister">Daftar Admin</button>
     </div>
     <div class="auth-err" id="authErr"></div>
     <div class="hint">
-      ℹ️ Hanya email admin yang dikonfigurasi dapat mendaftar sendiri.<br>
+      ℹ️ Hanya username admin yang dikonfigurasi dapat mendaftar sendiri.<br>
       User lain dibuat oleh admin lewat menu <b>Manajemen User</b>.
     </div>
   </div>
@@ -373,7 +373,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
         <b>admin</b> = semua akses · <b>sales</b> = input penjualan & pelunasan · <b>viewer</b> = hanya lihat
       </p>
       <div class="form-grid">
-        <div><label>Email</label><input type="email" id="newUserEmail" placeholder="user@example.com"></div>
+        <div><label>Username</label><input type="text" id="newUserEmail" placeholder="cth: budi (tanpa spasi)"></div>
         <div><label>Password</label><input type="text" id="newUserPass" placeholder="min 6 karakter"></div>
         <div><label>Role</label><select id="newUserRole">
           <option value="viewer">Viewer (lihat saja)</option>
@@ -388,7 +388,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <div class="card">
       <h2>👥 Daftar User</h2>
       <div class="scroll"><table id="tblUsers">
-        <thead><tr><th>Email</th><th>Role</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>Username</th><th>Role</th><th>Dibuat</th><th>Aksi</th></tr></thead>
         <tbody></tbody>
       </table></div>
       <p class="muted" style="margin-top:10px;font-size:11.5px">
@@ -404,7 +404,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <script>
 /* ============================================================
-   FIREBASE CONFIG — GANTI DENGAN CONFIG ANDA
+   FIREBASE CONFIG
 ============================================================ */
 const firebaseConfig = {
   apiKey: "AIzaSyAaqxrVh4nbCbQjC3zpvmoxb4B6J43TX98",
@@ -416,8 +416,9 @@ const firebaseConfig = {
   measurementId: "G-C73V7YKFL3"
 };
 
-/* GANTI: email admin pertama (harus sama dengan di Firestore Rules) */
-const BOOTSTRAP_ADMIN_EMAIL = 'p1w3nk@gmail.com';
+/* GANTI: username admin pertama */
+const BOOTSTRAP_ADMIN_USERNAME = 'admin';
+const FAKE_EMAIL_DOMAIN = '@dashboard.local'; // Domain rahasia untuk Firebase Auth
 
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -539,23 +540,42 @@ authOverlay.addEventListener('keydown', e => { if(e.key==='Enter') document.getE
 
 document.getElementById('authLogin').onclick = async () => {
   authErr.textContent = '';
-  const email = document.getElementById('authEmail').value.trim();
+  const uname = document.getElementById('authUsername').value.trim().toLowerCase();
   const pass = document.getElementById('authPassword').value;
-  if(!email || !pass){ authErr.textContent = 'Email & password wajib'; return; }
-  try { await auth.signInWithEmailAndPassword(email, pass); }
-  catch(e){ authErr.textContent = e.message; }
+  if(!uname || !pass){ authErr.textContent = 'Username & password wajib'; return; }
+  
+  try { 
+    await auth.signInWithEmailAndPassword(uname + FAKE_EMAIL_DOMAIN, pass); 
+  } catch(e){ 
+    if(e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential') {
+      authErr.textContent = 'Username atau Password salah.';
+    } else {
+      authErr.textContent = e.message; 
+    }
+  }
 };
+
 document.getElementById('authRegister').onclick = async () => {
   authErr.textContent = '';
-  const email = document.getElementById('authEmail').value.trim();
+  const uname = document.getElementById('authUsername').value.trim().toLowerCase();
   const pass = document.getElementById('authPassword').value;
-  if(!email || !pass || pass.length < 6){ authErr.textContent = 'Email & password (min 6) wajib'; return; }
-  if(email.toLowerCase() !== BOOTSTRAP_ADMIN_EMAIL.toLowerCase()){
-    authErr.textContent = 'Hanya email admin yang terdaftar yang bisa mendaftar.';
+  
+  if(!uname || !pass || pass.length < 6){ authErr.textContent = 'Username & password (min 6) wajib'; return; }
+  
+  if(uname !== BOOTSTRAP_ADMIN_USERNAME.toLowerCase()){
+    authErr.textContent = `Hanya username "${BOOTSTRAP_ADMIN_USERNAME}" yang bisa mendaftar sendiri.`;
     return;
   }
-  try { await auth.createUserWithEmailAndPassword(email, pass); }
-  catch(e){ authErr.textContent = e.message; }
+  
+  try { 
+    await auth.createUserWithEmailAndPassword(uname + FAKE_EMAIL_DOMAIN, pass); 
+  } catch(e){ 
+    if(e.code === 'auth/email-already-in-use') {
+      authErr.textContent = 'Username sudah dipakai. Silakan klik Masuk.';
+    } else {
+      authErr.textContent = e.message; 
+    }
+  }
 };
 document.getElementById('btnLogout').onclick = () => auth.signOut();
 
@@ -573,6 +593,10 @@ auth.onAuthStateChanged(async user => {
     document.getElementById('statusText').textContent = 'Belum login';
     return;
   }
+  
+  // Ekstrak username dari email (misal: "budi@dashboard.local" jadi "budi")
+  const userUsername = (user.email || '').split('@')[0];
+
   try {
     let profile = null;
     try {
@@ -581,14 +605,14 @@ auth.onAuthStateChanged(async user => {
     } catch(e){ console.warn('profile read:', e.message); }
 
     if(!profile){
-      // Bootstrap admin: email cocok
-      if(user.email && user.email.toLowerCase() === BOOTSTRAP_ADMIN_EMAIL.toLowerCase()){
+      // Bootstrap admin: cek apakah username cocok
+      if(userUsername === BOOTSTRAP_ADMIN_USERNAME.toLowerCase()){
         try {
           await fsdb.doc(`app/profiles/${user.uid}`).set({
-            email: user.email, role: 'admin',
+            email: userUsername, role: 'admin',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           });
-          profile = {email: user.email, role: 'admin'};
+          profile = {email: userUsername, role: 'admin'};
         } catch(e){ console.error('bootstrap create fail:', e); }
       }
     }
@@ -606,9 +630,10 @@ auth.onAuthStateChanged(async user => {
     }
 
     state._uid = user.uid;
-    state._email = user.email;
+    state._email = profile.email || userUsername; 
     state.role = profile.role;
-    authUserEmail.textContent = user.email || user.uid.slice(0,8);
+    
+    authUserEmail.textContent = userUsername; 
     hideAuth();
     applyRoleUI();
     document.getElementById('statusText').textContent = `Login sebagai ${ROLE_LABEL[state.role]}`;
@@ -686,18 +711,19 @@ function rebuildInvMap(){
 /* ============================================================
    USER MANAGEMENT (ADMIN ONLY)
 ============================================================ */
-async function adminCreateUser(email, password, role){
+async function adminCreateUser(username, password, role){
   // Gunakan secondary Firebase App agar sesi admin tidak logout
   const appName = 'creator-' + Date.now();
   const secondaryApp = firebase.initializeApp(firebaseConfig, appName);
   const secAuth = secondaryApp.auth();
   try {
-    const cred = await secAuth.createUserWithEmailAndPassword(email, password);
+    const cred = await secAuth.createUserWithEmailAndPassword(username + FAKE_EMAIL_DOMAIN, password);
     const uid = cred.user.uid;
+    await cred.user.updateProfile({ displayName: username });
     await secAuth.signOut();
     // Admin menulis profile (rules: hanya admin yang boleh)
     await fsdb.doc(`app/profiles/${uid}`).set({
-      email, role,
+      email: username, role,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       createdBy: state._uid
     });
@@ -709,22 +735,29 @@ async function adminCreateUser(email, password, role){
 
 document.getElementById('btnCreateUser').onclick = async () => {
   if(!isAdmin()) return;
-  const email = document.getElementById('newUserEmail').value.trim();
+  const uname = document.getElementById('newUserEmail').value.trim().toLowerCase();
   const pass = document.getElementById('newUserPass').value;
   const role = document.getElementById('newUserRole').value;
   const msg = document.getElementById('createUserMsg');
   msg.textContent = '';
-  if(!email || !pass || pass.length < 6){ msg.innerHTML = '<span style="color:#fca5a5">Email & password (min 6) wajib</span>'; return; }
+  
+  if(!uname || !pass || pass.length < 6){ msg.innerHTML = '<span style="color:#fca5a5">Username & password (min 6) wajib</span>'; return; }
+  if(uname.includes(' ')) { msg.innerHTML = '<span style="color:#fca5a5">Username tidak boleh pakai spasi</span>'; return; }
   if(!['admin','sales','viewer'].includes(role)){ msg.innerHTML = '<span style="color:#fca5a5">Role tidak valid</span>'; return; }
+  
   try {
     msg.textContent = '⏳ Membuat user…';
-    await adminCreateUser(email, pass, role);
-    msg.innerHTML = `<span style="color:#86efac">✅ User ${email} dibuat sebagai ${ROLE_LABEL[role]}</span>`;
+    await adminCreateUser(uname, pass, role);
+    msg.innerHTML = `<span style="color:#86efac">✅ User <b>${uname}</b> dibuat sebagai ${ROLE_LABEL[role]}</span>`;
     document.getElementById('newUserEmail').value = '';
     document.getElementById('newUserPass').value = '';
   } catch(e){
     console.error(e);
-    msg.innerHTML = `<span style="color:#fca5a5">❌ ${e.message}</span>`;
+    if(e.code === 'auth/email-already-in-use') {
+      msg.innerHTML = `<span style="color:#fca5a5">❌ Username sudah dipakai.</span>`;
+    } else {
+      msg.innerHTML = `<span style="color:#fca5a5">❌ ${e.message}</span>`;
+    }
   }
 };
 
@@ -737,7 +770,7 @@ function renderUserTable(){
       const isMe = p._id === state._uid;
       const created = p.createdAt?.toDate ? dateKey(p.createdAt.toDate()) : '—';
       return `<tr>
-        <td>${p.email||'(no email)'} ${isMe?'<span class="muted">(Anda)</span>':''}</td>
+        <td>${p.email||'(no username)'} ${isMe?'<span class="muted">(Anda)</span>':''}</td>
         <td>
           <select data-uid="${p._id}" class="role-select" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px" ${isMe?'disabled':''}>
             <option value="viewer" ${p.role==='viewer'?'selected':''}>Viewer</option>

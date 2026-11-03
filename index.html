@@ -1354,27 +1354,27 @@ document.getElementById('btnAddPay').onclick = async e => {
 };
 
 /* ============================================================
-   IMPORT PEMBAYARAN (PERBAIKAN CICILAN)
+   IMPORT PEMBAYARAN (PERBAIKAN DUPLIKAT & CICILAN)
 ============================================================ */
+let isImportingPay = false;
+
 async function handlePayFile(file, reportEl){
-  if(!file){ 
-    toast('⚠️ Pilih file dulu'); 
-    return; 
-  }
-  if(!canEdit()){ 
-    toast('❌ Akses ditolak. Hanya Admin/Sales yang bisa import.'); 
-    return; 
-  }
-  if(!state.clean.length){ 
-    toast('⚠️ Import penjualan dulu sebelum import pembayaran'); 
-    return; 
+  if(isImportingPay){
+    toast('⚠️ Import sedang berjalan, harap tunggu...');
+    return;
   }
   
+  if(!file){ toast('⚠️ Pilih file dulu'); return; }
+  if(!canEdit()){ toast('❌ Akses ditolak. Hanya Admin/Sales yang bisa import.'); return; }
+  if(!state.clean.length){ toast('⚠️ Import penjualan dulu sebelum import pembayaran'); return; }
+  
+  isImportingPay = true;
   if(reportEl) reportEl.innerHTML = '<span class="muted">⏳ Membaca file...</span>';
   
   const reader = new FileReader();
   
   reader.onerror = () => {
+    isImportingPay = false;
     toast('❌ Gagal membaca file', 4000);
     if(reportEl) reportEl.innerHTML = '<span style="color:#fca5a5">❌ Gagal membaca file</span>';
   };
@@ -1386,11 +1386,12 @@ async function handlePayFile(file, reportEl){
       const rows = XLSX.utils.sheet_to_json(ws, {defval:null, raw:true});
       
       console.log('📥 Import Pembayaran - Total rows:', rows.length);
-      console.log('📥 Sample row:', rows[0]);
+      if(rows.length > 0) console.log('📥 Sample row:', rows[0]);
       
       if(!rows.length){ 
         toast('❌ File kosong / tidak ada data'); 
         if(reportEl) reportEl.innerHTML = '<span style="color:#fca5a5">❌ File kosong</span>';
+        isImportingPay = false;
         return; 
       }
       
@@ -1404,23 +1405,23 @@ async function handlePayFile(file, reportEl){
         return o; 
       };
       
-      let ok=0, skipNoInv=0, skipOver=0, skipBad=0;
+      let ok=0, skipNoInv=0, skipOver=0, skipBad=0, skipDup=0;
       const details = [];
       
-      const invIndex = new Map(state.piutang.map(p => [String(p.inv).trim(), p]));
+      const invIndex = new Map();
+      state.piutang.forEach(p => { invIndex.set(String(p.inv).trim(), p); });
+      
       const paidNow = new Map();
       state.payments.forEach(p => {
         const key = String(p.inv).trim();
         paidNow.set(key, (paidNow.get(key)||0) + (p.amount||0));
       });
       
+      const seenInFile = new Set();
       const toWrite = [];
       
       for(let i=0; i<rows.length; i++){
-        const raw = rows[i];
-        const r = norm(raw);
-        
-        if(i < 3) console.log(`Row ${i+1}:`, r);
+        const r = norm(rows[i]);
         
         const inv = String(r.INV ?? r.INVOICE ?? r.NO_INVOICE ?? '').trim();
         const tglRaw = r.TGL_BAYAR ?? r.TANGGAL_BAYAR ?? r.TANGGAL ?? r.DATE ?? r.TGL ?? r.TGL_BAYAR_;
@@ -1432,7 +1433,7 @@ async function handlePayFile(file, reportEl){
         
         if(!inv){ 
           skipBad++; 
-          if(i < 10) details.push(`Baris ${i+2}: INV kosong`); 
+          if(details.length < 20) details.push(`Baris ${i+2}: INV kosong`); 
           continue; 
         }
         
@@ -1441,51 +1442,53 @@ async function handlePayFile(file, reportEl){
         
         if(!p){ 
           skipNoInv++; 
-          if(i < 10) details.push(`INV ${invKey} tidak ada di data penjualan`); 
+          if(details.length < 20) details.push(`Baris ${i+2}: INV "${invKey}" tidak ada di data penjualan`); 
           continue; 
         }
         
         const d = parseDate(tglRaw);
         if(!d){ 
           skipBad++; 
-          if(i < 10) details.push(`INV ${invKey}: tanggal invalid (${tglRaw})`); 
+          if(details.length < 20) details.push(`Baris ${i+2}: INV ${invKey} tanggal invalid (${tglRaw})`); 
           continue; 
         }
         
         if(!(nominal > 0)){ 
           skipBad++; 
-          if(i < 10) details.push(`INV ${invKey}: nominal ≤ 0 (${nominal})`); 
+          if(details.length < 20) details.push(`Baris ${i+2}: INV ${invKey} nominal ≤ 0 (${nominal})`); 
           continue; 
         }
         
-        // --- PERBAIKAN VALIDASI CICILAN ---
-        const sudah = paidNow.get(invKey) || 0;
-        const sisa = (p.total || 0) - sudah;
+        const dupKey = `${invKey}|${dateKey(d)}|${nominal}`;
+        if(seenInFile.has(dupKey)){
+          skipDup++;
+          if(details.length < 20) details.push(`Baris ${i+2}: DUPLIKAT dalam file (INV ${invKey}, ${dateKey(d)}, Rp ${fmtNum(nominal)})`);
+          continue;
+        }
+        seenInFile.add(dupKey);
         
-        // Toleransi 1 rupiah untuk pembulatan
-        if(nominal > sisa + 1){ 
+        const sudah = paidNow.get(invKey) || 0;
+        const totalInv = p.total || 0;
+        const sisa = totalInv - sudah;
+        
+        if(nominal > sisa + 0.5){ 
           skipOver++; 
-          if(i < 10) {
-            details.push(`INV ${invKey}: Bayar Rp ${fmtNum(nominal)} > Sisa Rp ${fmtNum(sisa)}. (Total inv: Rp ${fmtNum(p.total)}, sudah dibayar: Rp ${fmtNum(sudah)})`); 
+          if(details.length < 20) {
+            details.push(`Baris ${i+2}: INV ${invKey} nominal Rp ${fmtNum(nominal)} > sisa Rp ${fmtNum(sisa)} (Total: Rp ${fmtNum(totalInv)}, sudah dibayar: Rp ${fmtNum(sudah)}). Baris DITOLAK.`); 
           }
           continue; 
         }
-        // -----------------------------------
         
         toWrite.push({
-          inv: invKey, 
-          date: d, 
-          amount: nominal, 
-          method: metode, 
-          bank, 
-          ref, 
-          catatan
+          inv: invKey, date: d, amount: nominal, method: metode, 
+          bank, ref, catatan
         });
         paidNow.set(invKey, sudah + nominal); 
         ok++;
       }
       
-      console.log('📥 Import Pembayaran - Valid:', ok, 'Skip:', {skipNoInv, skipOver, skipBad});
+      console.log('📥 Import Pembayaran - Valid:', ok, 'Skip:', {skipNoInv, skipOver, skipBad, skipDup});
+      console.log('📥 toWrite (akan disimpan):', toWrite);
       
       if(toWrite.length > 0){
         const col = fsdb.collection('payments');
@@ -1494,25 +1497,20 @@ async function handlePayFile(file, reportEl){
           toWrite.slice(i, i+400).forEach(p => {
             const ref = col.doc();
             batch.set(ref, {
-              inv: p.inv, 
-              date: firebase.firestore.Timestamp.fromDate(p.date), 
-              amount: p.amount, 
-              method: p.method, 
-              bank: p.bank, 
-              ref: p.ref, 
-              catatan: p.catatan
+              inv: p.inv, date: firebase.firestore.Timestamp.fromDate(p.date), 
+              amount: p.amount, method: p.method, bank: p.bank, ref: p.ref, catatan: p.catatan
             });
           });
           await batch.commit();
         }
       }
       
-      const msg = `✅ Berhasil: ${ok} · ⚠️ INV tidak ada: ${skipNoInv} · ⚠️ Melebihi sisa: ${skipOver} · ⚠️ Format salah: ${skipBad}`;
-      toast(msg, 5000);
+      const msg = `✅ Berhasil: ${ok} · ⚠️ INV tidak ada: ${skipNoInv} · ⚠️ Melebihi sisa: ${skipOver} · ⚠️ Format salah: ${skipBad} · 🔁 Duplikat: ${skipDup}`;
+      toast(msg, 6000);
       
       if(reportEl) {
-        reportEl.innerHTML = `<div style="color:#86efac;font-weight:600">${msg}</div>` + 
-          (details.length ? `<div style="margin-top:8px;color:#fca5a5;font-size:11.5px;line-height:1.6">${details.join('<br>')}${rows.length > 10 ? '<br>…' : ''}</div>` : '');
+        reportEl.innerHTML = `<div style="color:#86efac;font-weight:600;margin-bottom:6px">${msg}</div>` + 
+          (details.length ? `<div style="color:#fcd34d;font-size:11.5px;line-height:1.6">${details.join('<br>')}${rows.length > 20 ? '<br>…' : ''}</div>` : '');
       }
       
       await fetchData();
@@ -1521,26 +1519,31 @@ async function handlePayFile(file, reportEl){
       console.error('❌ Import Pembayaran error:', err); 
       toast('❌ ' + err.message, 5000); 
       if(reportEl) reportEl.innerHTML = `<span style="color:#fca5a5">❌ Error: ${err.message}</span>`;
+    } finally {
+      isImportingPay = false;
     }
   };
   
   reader.readAsArrayBuffer(file);
 }
 
-document.getElementById('payFileInput').addEventListener('change', async e => {
+const payFileInputEl = document.getElementById('payFileInput');
+const newPayFileInput = payFileInputEl.cloneNode(true);
+payFileInputEl.parentNode.replaceChild(newPayFileInput, payFileInputEl);
+newPayFileInput.addEventListener('change', async e => {
   const file = e.target.files[0];
   if(!file) return;
   await handlePayFile(file, document.getElementById('importPayResult'));
   e.target.value = '';
 });
 
-document.getElementById('btnImportPay').onclick = async () => {
+const btnImportPayEl = document.getElementById('btnImportPay');
+const newBtnImportPay = btnImportPayEl.cloneNode(true);
+btnImportPayEl.parentNode.replaceChild(newBtnImportPay, btnImportPayEl);
+newBtnImportPay.onclick = async () => {
   const fileInput = document.getElementById('payFileInput2');
   const file = fileInput.files[0];
-  if(!file){ 
-    toast('⚠️ Pilih file dulu di panel Import Pembayaran'); 
-    return; 
-  }
+  if(!file){ toast('⚠️ Pilih file dulu di panel Import Pembayaran'); return; }
   await handlePayFile(file, document.getElementById('importPayResult'));
   fileInput.value = '';
 };

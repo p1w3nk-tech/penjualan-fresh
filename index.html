@@ -440,7 +440,7 @@ const firebaseConfig = {
 
 /* GANTI: username admin pertama */
 const BOOTSTRAP_ADMIN_USERNAME = 'admin';
-const FAKE_EMAIL_DOMAIN = '@dashboard.local'; // Domain rahasia untuk Firebase Auth
+const FAKE_EMAIL_DOMAIN = '@dashboard.local';
 
 if(location.protocol==='file:') console.warn('Buka lewat http://localhost atau hosting, Firebase Auth tidak jalan di file://');
 firebase.initializeApp(firebaseConfig);
@@ -457,7 +457,6 @@ const state = {
   _outstanding:null, _lastMethodSig:'',
   _uid:null, _email:null, role:null,
   _bootstrapped:false,
-  // Pagination state
   pag: {
     piutang: { page: 1, pageSize: 50, total: 0 },
     pay: { page: 1, pageSize: 50, total: 0 }
@@ -677,7 +676,6 @@ auth.onAuthStateChanged(async user => {
     applyRoleUI();
     document.getElementById('statusText').textContent = `Login sebagai ${ROLE_LABEL[state.role]}`;
     
-    // ONE-TIME FETCH: Load data awal
     await fetchData(); 
     
     if(isAdmin()) fetchProfiles();
@@ -699,8 +697,6 @@ async function fetchData() {
   setSyncState('loading');
   
   try {
-    // 1. Fetch Sales (dengan limit / filter jika diperlukan)
-    // Catatan: Jika data sangat besar, tambahkan .limit(5000) atau filter where('tahun','==', '2026')
     const salesSnap = await fsdb.collection('sales').get();
     state.clean = salesSnap.docs.map(doc => {
       const d = doc.data();
@@ -712,7 +708,6 @@ async function fetchData() {
       };
     });
 
-    // 2. Fetch Payments
     const paySnap = await fsdb.collection('payments').get();
     state.payments = paySnap.docs.map(doc => {
       const d = doc.data();
@@ -767,7 +762,6 @@ function rebuildInvMap(){
   state.invMap = map;
 }
 
-// Tombol Refresh Manual
 document.getElementById('btnRefresh').onclick = async () => {
   if (!state._uid) { toast('Silakan login dulu'); return; }
   toast('🔄 Memuat ulang data...', 1500);
@@ -893,7 +887,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
       if(mode === 'replace') await fireDeleteAll();
       await fireBulkWriteSales(result);
       toast(`✅ ${result.length} baris terkirim`);
-      await fetchData(); // Refresh data setelah import
+      await fetchData();
     } catch(err){ console.error(err); toast('❌ '+err.message, 4500); }
   };
   reader.readAsArrayBuffer(f);
@@ -1009,13 +1003,12 @@ function hitungPiutang(){
   }
   list.sort((a,b)=> b.sisa-a.sisa);
   state.piutang = list;
-  // Update pagination totals
   state.pag.piutang.total = list.length;
   state.pag.pay.total = state.payments.length;
 }
 
 /* ============================================================
-   RENDER (DENGAN PAGINASI)
+   RENDER
 ============================================================ */
 function renderAll(){
   refreshSlicerOptions(); updateSlicerInfo();
@@ -1131,7 +1124,7 @@ function renderChart(labels, pen, pay){
 }
 
 /* ============================================================
-   PIUTANG RENDER (DENGAN PAGINASI)
+   PIUTANG RENDER (PAGINASI)
 ============================================================ */
 function umurLabel(u){
   if(u>0) return `<span class="umur-bad">+${u} hari</span>`;
@@ -1143,7 +1136,6 @@ function renderPiutang(){
   const V = getView();
   const pg = state.pag.piutang;
   
-  // Render Tabel Piutang (terpaginasi)
   const start = (pg.page - 1) * pg.pageSize;
   const end = Math.min(start + pg.pageSize, V.piutang.length);
   const pageItems = V.piutang.slice(start, end);
@@ -1166,13 +1158,11 @@ function renderPiutang(){
     </tr>`;
   }).join('') : `<tr><td colspan="${canEdit()?10:9}" class="empty">Belum ada data</td></tr>`;
 
-  // Update Pagination Info
   document.getElementById('pagPiutangInfo').textContent = 
     `Menampilkan ${V.piutang.length ? start+1 : 0}-${end} dari ${V.piutang.length} data`;
   document.getElementById('pagPiutangPrev').disabled = pg.page <= 1;
   document.getElementById('pagPiutangNext').disabled = end >= V.piutang.length;
 
-  // Render Tabel Pembayaran (terpaginasi)
   const pgPay = state.pag.pay;
   const startPay = (pgPay.page - 1) * pgPay.pageSize;
   const endPay = Math.min(startPay + pgPay.pageSize, V.paysByInv.length);
@@ -1195,26 +1185,22 @@ function renderPiutang(){
     </tr>`;
   }).join('') : `<tr><td colspan="${canEdit()?7:6}" class="empty">Belum ada pembayaran</td></tr>`;
 
-  // Update Pagination Info Pembayaran
   document.getElementById('pagPayInfo').textContent = 
     `Menampilkan ${V.paysByInv.length ? startPay+1 : 0}-${endPay} dari ${V.paysByInv.length} data`;
   document.getElementById('pagPayPrev').disabled = pgPay.page <= 1;
   document.getElementById('pagPayNext').disabled = endPay >= V.paysByInv.length;
 
-  // Update hint & selected inv
   const openInv = state.piutang.filter(p => p.sisa>0.5);
   document.getElementById('payHint').textContent = openInv.length
     ? `${openInv.length} invoice belum lunas · total sisa ${fmtRp(openInv.reduce((s,p)=>s+p.sisa,0))}`
     : 'Semua invoice sudah lunas 🎉';
 }
 
-// Event listener pagination
 document.getElementById('pagPiutangPrev').onclick = () => { state.pag.piutang.page--; renderPiutang(); };
 document.getElementById('pagPiutangNext').onclick = () => { state.pag.piutang.page++; renderPiutang(); };
 document.getElementById('pagPayPrev').onclick = () => { state.pag.pay.page--; renderPiutang(); };
 document.getElementById('pagPayNext').onclick = () => { state.pag.pay.page++; renderPiutang(); };
 
-// Event listener hapus invoice
 document.querySelector('#tblPiutang').addEventListener('click', async e => {
   const btn = e.target.closest('[data-delinv]'); if(!btn) return;
   if(!canEdit()) return;
@@ -1224,7 +1210,6 @@ document.querySelector('#tblPiutang').addEventListener('click', async e => {
   catch(err){ toast('❌ '+err.message, 4000); }
 });
 
-// Event listener edit/hapus pembayaran
 document.querySelector('#tblPay').addEventListener('click', async e => {
   if(!canEdit()) return;
   const eb = e.target.closest('[data-editpay]');
@@ -1364,12 +1349,12 @@ document.getElementById('btnAddPay').onclick = async e => {
     selectedInv=''; invSearch.value='';
     document.getElementById('paySelectedInfo').innerHTML = '';
     toast('✅ Pembayaran disimpan');
-    await fetchData(); // Refresh
+    await fetchData();
   } catch(err){ console.error(err); toast('❌ '+err.message, 4000); }
 };
 
 /* ============================================================
-   IMPORT PEMBAYARAN
+   IMPORT PEMBAYARAN (PERBAIKAN CICILAN)
 ============================================================ */
 async function handlePayFile(file, reportEl){
   if(!file){ 
@@ -1409,7 +1394,6 @@ async function handlePayFile(file, reportEl){
         return; 
       }
       
-      // Normalisasi header (uppercase, trim, ganti spasi dengan _)
       const norm = r => { 
         const o = {}; 
         for(const k in r) {
@@ -1423,10 +1407,7 @@ async function handlePayFile(file, reportEl){
       let ok=0, skipNoInv=0, skipOver=0, skipBad=0;
       const details = [];
       
-      // Index invoice untuk validasi cepat
       const invIndex = new Map(state.piutang.map(p => [String(p.inv).trim(), p]));
-      
-      // Track pembayaran yang sudah ada (termasuk yang baru di-batch ini)
       const paidNow = new Map();
       state.payments.forEach(p => {
         const key = String(p.inv).trim();
@@ -1439,7 +1420,6 @@ async function handlePayFile(file, reportEl){
         const raw = rows[i];
         const r = norm(raw);
         
-        // Debug untuk 3 baris pertama
         if(i < 3) console.log(`Row ${i+1}:`, r);
         
         const inv = String(r.INV ?? r.INVOICE ?? r.NO_INVOICE ?? '').trim();
@@ -1456,7 +1436,6 @@ async function handlePayFile(file, reportEl){
           continue; 
         }
         
-        // Cari invoice - normalisasi key
         const invKey = String(inv).trim();
         const p = invIndex.get(invKey);
         
@@ -1479,14 +1458,19 @@ async function handlePayFile(file, reportEl){
           continue; 
         }
         
+        // --- PERBAIKAN VALIDASI CICILAN ---
         const sudah = paidNow.get(invKey) || 0;
         const sisa = (p.total || 0) - sudah;
         
-        if(nominal > sisa + 0.5){ 
+        // Toleransi 1 rupiah untuk pembulatan
+        if(nominal > sisa + 1){ 
           skipOver++; 
-          if(i < 10) details.push(`INV ${invKey}: Rp ${fmtNum(nominal)} > sisa Rp ${fmtNum(sisa)}`); 
+          if(i < 10) {
+            details.push(`INV ${invKey}: Bayar Rp ${fmtNum(nominal)} > Sisa Rp ${fmtNum(sisa)}. (Total inv: Rp ${fmtNum(p.total)}, sudah dibayar: Rp ${fmtNum(sudah)})`); 
+          }
           continue; 
         }
+        // -----------------------------------
         
         toWrite.push({
           inv: invKey, 
@@ -1503,7 +1487,6 @@ async function handlePayFile(file, reportEl){
       
       console.log('📥 Import Pembayaran - Valid:', ok, 'Skip:', {skipNoInv, skipOver, skipBad});
       
-      // Write ke Firestore (batch)
       if(toWrite.length > 0){
         const col = fsdb.collection('payments');
         for(let i=0; i<toWrite.length; i+=400){
@@ -1532,7 +1515,6 @@ async function handlePayFile(file, reportEl){
           (details.length ? `<div style="margin-top:8px;color:#fca5a5;font-size:11.5px;line-height:1.6">${details.join('<br>')}${rows.length > 10 ? '<br>…' : ''}</div>` : '');
       }
       
-      // Refresh data dari Firebase
       await fetchData();
       
     } catch(err){ 
@@ -1545,7 +1527,6 @@ async function handlePayFile(file, reportEl){
   reader.readAsArrayBuffer(file);
 }
 
-// Event listener: Import dari toolbar atas
 document.getElementById('payFileInput').addEventListener('change', async e => {
   const file = e.target.files[0];
   if(!file) return;
@@ -1553,7 +1534,6 @@ document.getElementById('payFileInput').addEventListener('change', async e => {
   e.target.value = '';
 });
 
-// Event listener: Import dari tombol di panel Piutang
 document.getElementById('btnImportPay').onclick = async () => {
   const fileInput = document.getElementById('payFileInput2');
   const file = fileInput.files[0];
@@ -1872,11 +1852,13 @@ function downloadPayTemplate(){
     ['2. Opsional: METODE, BANK, NO_REF, CATATAN'],
     ['3. Format tanggal: YYYY-MM-DD atau DD/MM/YYYY'],
     ['4. INV harus ada di data penjualan'],
-    ['5. JUMLAH_BAYAR ≤ sisa piutang'],[''],
-    ['Contoh:'],
+    ['5. JUMLAH_BAYAR ≤ sisa piutang'],
+    ['6. Untuk CICILAN, tulis beberapa baris dengan INV yang sama.'],
+    ['   Pastikan total cicilan ≤ nilai invoice.'],[''],
+    ['Contoh Cicilan:'],
     ['INV','TGL_BAYAR','JUMLAH_BAYAR','METODE','BANK','NO_REF','CATATAN'],
-    ['26000001','2026-01-05',100000,'Transfer','BCA','TRX-001',''],
-    ['26000001','2026-01-20',50000,'Tunai','','','cicilan ke-2']
+    ['26000001','2026-01-05',100000,'Transfer','BCA','TRX-001','Cicilan 1'],
+    ['26000001','2026-01-20',50000,'Tunai','','','Cicilan 2']
   ]);
   guide['!cols'] = [{wch:22},{wch:16},{wch:16},{wch:12},{wch:12},{wch:16},{wch:24}];
   XLSX.utils.book_append_sheet(wb, ws, 'PEMBAYARAN');
@@ -2106,7 +2088,6 @@ function applySlicers(){
   SL.minggu = document.getElementById('slMinggu').value;
   SL.sales = document.getElementById('slSales').value.trim();
   SL.cust = document.getElementById('slCust').value.trim();
-  // Reset pagination ke halaman 1 saat filter berubah
   state.pag.piutang.page = 1;
   state.pag.pay.page = 1;
   updateSlicerInfo();

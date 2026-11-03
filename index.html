@@ -1372,68 +1372,197 @@ document.getElementById('btnAddPay').onclick = async e => {
    IMPORT PEMBAYARAN
 ============================================================ */
 async function handlePayFile(file, reportEl){
-  if(!file){ toast('Pilih file dulu'); return; }
-  if(!canEdit()){ toast('Akses ditolak'); return; }
-  if(!state.clean.length){ toast('⚠️ Import penjualan dulu'); return; }
+  if(!file){ 
+    toast('⚠️ Pilih file dulu'); 
+    return; 
+  }
+  if(!canEdit()){ 
+    toast('❌ Akses ditolak. Hanya Admin/Sales yang bisa import.'); 
+    return; 
+  }
+  if(!state.clean.length){ 
+    toast('⚠️ Import penjualan dulu sebelum import pembayaran'); 
+    return; 
+  }
+  
+  if(reportEl) reportEl.innerHTML = '<span class="muted">⏳ Membaca file...</span>';
+  
   const reader = new FileReader();
+  
+  reader.onerror = () => {
+    toast('❌ Gagal membaca file', 4000);
+    if(reportEl) reportEl.innerHTML = '<span style="color:#fca5a5">❌ Gagal membaca file</span>';
+  };
+  
   reader.onload = async ev => {
     try {
       const wb = XLSX.read(ev.target.result, {cellDates:true});
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, {defval:null, raw:true});
-      if(!rows.length){ toast('File kosong'); return; }
-      const norm = r => { const o={}; for(const k in r) o[String(k).trim().toUpperCase().replace(/\s+/g,'_')] = r[k]; return o; };
+      
+      console.log('📥 Import Pembayaran - Total rows:', rows.length);
+      console.log('📥 Sample row:', rows[0]);
+      
+      if(!rows.length){ 
+        toast('❌ File kosong / tidak ada data'); 
+        if(reportEl) reportEl.innerHTML = '<span style="color:#fca5a5">❌ File kosong</span>';
+        return; 
+      }
+      
+      // Normalisasi header (uppercase, trim, ganti spasi dengan _)
+      const norm = r => { 
+        const o = {}; 
+        for(const k in r) {
+          if(k === null || k === undefined) continue;
+          const key = String(k).trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+          o[key] = r[k]; 
+        }
+        return o; 
+      };
+      
       let ok=0, skipNoInv=0, skipOver=0, skipBad=0;
       const details = [];
-      const invIndex = new Map(state.piutang.map(p=>[p.inv, p]));
+      
+      // Index invoice untuk validasi cepat
+      const invIndex = new Map(state.piutang.map(p => [String(p.inv).trim(), p]));
+      
+      // Track pembayaran yang sudah ada (termasuk yang baru di-batch ini)
       const paidNow = new Map();
-      state.payments.forEach(p => paidNow.set(p.inv, (paidNow.get(p.inv)||0)+p.amount));
+      state.payments.forEach(p => {
+        const key = String(p.inv).trim();
+        paidNow.set(key, (paidNow.get(key)||0) + (p.amount||0));
+      });
+      
       const toWrite = [];
-      for(const raw of rows){
+      
+      for(let i=0; i<rows.length; i++){
+        const raw = rows[i];
         const r = norm(raw);
-        const inv = String(r.INV ?? '').trim();
-        const tglRaw = r.TGL_BAYAR;
-        const nominal = toNum(r.JUMLAH_BAYAR);
-        const metode = String(r.METODE ?? 'Transfer').trim() || 'Transfer';
-        const bank = String(r.BANK ?? '').trim();
-        const ref = String(r.NO_REF ?? '').trim();
-        const catatan = String(r.CATATAN ?? '').trim();
-        if(!inv){ skipBad++; continue; }
-        const p = invIndex.get(inv);
-        if(!p){ skipNoInv++; details.push(`INV ${inv} tidak ada`); continue; }
+        
+        // Debug untuk 3 baris pertama
+        if(i < 3) console.log(`Row ${i+1}:`, r);
+        
+        const inv = String(r.INV ?? r.INVOICE ?? r.NO_INVOICE ?? '').trim();
+        const tglRaw = r.TGL_BAYAR ?? r.TANGGAL_BAYAR ?? r.TANGGAL ?? r.DATE ?? r.TGL ?? r.TGL_BAYAR_;
+        const nominal = toNum(r.JUMLAH_BAYAR ?? r.JUMLAH ?? r.NOMINAL ?? r.AMOUNT ?? r.BAYAR);
+        const metode = String(r.METODE ?? r.METHOD ?? r.CARA_BAYAR ?? 'Transfer').trim() || 'Transfer';
+        const bank = String(r.BANK ?? r.NAMA_BANK ?? '').trim();
+        const ref = String(r.NO_REF ?? r.REF ?? r.REFERENSI ?? '').trim();
+        const catatan = String(r.CATATAN ?? r.NOTE ?? r.KETERANGAN ?? '').trim();
+        
+        if(!inv){ 
+          skipBad++; 
+          if(i < 10) details.push(`Baris ${i+2}: INV kosong`); 
+          continue; 
+        }
+        
+        // Cari invoice - normalisasi key
+        const invKey = String(inv).trim();
+        const p = invIndex.get(invKey);
+        
+        if(!p){ 
+          skipNoInv++; 
+          if(i < 10) details.push(`INV ${invKey} tidak ada di data penjualan`); 
+          continue; 
+        }
+        
         const d = parseDate(tglRaw);
-        if(!d){ skipBad++; details.push(`INV ${inv}: tanggal invalid`); continue; }
-        if(!(nominal>0)){ skipBad++; details.push(`INV ${inv}: nominal ≤ 0`); continue; }
-        const sudah = paidNow.get(inv)||0, sisa = p.total - sudah;
-        if(nominal > sisa+0.5){ skipOver++; details.push(`INV ${inv}: ${fmtRp(nominal)} > sisa ${fmtRp(sisa)}`); continue; }
-        toWrite.push({inv, date:d, amount:nominal, method:metode, bank, ref, catatan});
-        paidNow.set(inv, sudah+nominal); ok++;
-      }
-      const col = fsdb.collection('payments');
-      for(let i=0; i<toWrite.length; i+=400){
-        const batch = fsdb.batch();
-        toWrite.slice(i,i+400).forEach(p => {
-          const ref = col.doc();
-          batch.set(ref, {inv:p.inv, date:firebase.firestore.Timestamp.fromDate(p.date), amount:p.amount, method:p.method, bank:p.bank, ref:p.ref, catatan:p.catatan});
+        if(!d){ 
+          skipBad++; 
+          if(i < 10) details.push(`INV ${invKey}: tanggal invalid (${tglRaw})`); 
+          continue; 
+        }
+        
+        if(!(nominal > 0)){ 
+          skipBad++; 
+          if(i < 10) details.push(`INV ${invKey}: nominal ≤ 0 (${nominal})`); 
+          continue; 
+        }
+        
+        const sudah = paidNow.get(invKey) || 0;
+        const sisa = (p.total || 0) - sudah;
+        
+        if(nominal > sisa + 0.5){ 
+          skipOver++; 
+          if(i < 10) details.push(`INV ${invKey}: Rp ${fmtNum(nominal)} > sisa Rp ${fmtNum(sisa)}`); 
+          continue; 
+        }
+        
+        toWrite.push({
+          inv: invKey, 
+          date: d, 
+          amount: nominal, 
+          method: metode, 
+          bank, 
+          ref, 
+          catatan
         });
-        await batch.commit();
+        paidNow.set(invKey, sudah + nominal); 
+        ok++;
       }
-      const msg = `✅ Import: ${ok} berhasil, ${skipNoInv} INV tidak ada, ${skipOver} melebihi sisa, ${skipBad} format salah.`;
-      toast(msg, 4000);
-      if(reportEl) reportEl.innerHTML = `<b>${msg}</b>` + (details.length ? `<br><span class="muted">${details.slice(0,15).join('<br>')}${details.length>15?`<br>… (${details.length-15} lainnya)`:''}</span>` : '');
-      await fetchData(); // Refresh
-    } catch(err){ console.error(err); toast('❌ '+err.message, 4500); }
+      
+      console.log('📥 Import Pembayaran - Valid:', ok, 'Skip:', {skipNoInv, skipOver, skipBad});
+      
+      // Write ke Firestore (batch)
+      if(toWrite.length > 0){
+        const col = fsdb.collection('payments');
+        for(let i=0; i<toWrite.length; i+=400){
+          const batch = fsdb.batch();
+          toWrite.slice(i, i+400).forEach(p => {
+            const ref = col.doc();
+            batch.set(ref, {
+              inv: p.inv, 
+              date: firebase.firestore.Timestamp.fromDate(p.date), 
+              amount: p.amount, 
+              method: p.method, 
+              bank: p.bank, 
+              ref: p.ref, 
+              catatan: p.catatan
+            });
+          });
+          await batch.commit();
+        }
+      }
+      
+      const msg = `✅ Berhasil: ${ok} · ⚠️ INV tidak ada: ${skipNoInv} · ⚠️ Melebihi sisa: ${skipOver} · ⚠️ Format salah: ${skipBad}`;
+      toast(msg, 5000);
+      
+      if(reportEl) {
+        reportEl.innerHTML = `<div style="color:#86efac;font-weight:600">${msg}</div>` + 
+          (details.length ? `<div style="margin-top:8px;color:#fca5a5;font-size:11.5px;line-height:1.6">${details.join('<br>')}${rows.length > 10 ? '<br>…' : ''}</div>` : '');
+      }
+      
+      // Refresh data dari Firebase
+      await fetchData();
+      
+    } catch(err){ 
+      console.error('❌ Import Pembayaran error:', err); 
+      toast('❌ ' + err.message, 5000); 
+      if(reportEl) reportEl.innerHTML = `<span style="color:#fca5a5">❌ Error: ${err.message}</span>`;
+    }
   };
+  
   reader.readAsArrayBuffer(file);
 }
-document.getElementById('payFileInput').addEventListener('change', e => {
-  handlePayFile(e.target.files[0], document.getElementById('importPayResult'));
+
+// Event listener: Import dari toolbar atas
+document.getElementById('payFileInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  await handlePayFile(file, document.getElementById('importPayResult'));
   e.target.value = '';
 });
-document.getElementById('btnImportPay').onclick = () => {
-  const f = document.getElementById('payFileInput2').files[0];
-  if(!f){ toast('Pilih file dulu'); return; }
-  handlePayFile(f, document.getElementById('importPayResult'));
+
+// Event listener: Import dari tombol di panel Piutang
+document.getElementById('btnImportPay').onclick = async () => {
+  const fileInput = document.getElementById('payFileInput2');
+  const file = fileInput.files[0];
+  if(!file){ 
+    toast('⚠️ Pilih file dulu di panel Import Pembayaran'); 
+    return; 
+  }
+  await handlePayFile(file, document.getElementById('importPayResult'));
+  fileInput.value = '';
 };
 
 /* ============================================================

@@ -155,7 +155,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <label>Invoice</label><input type="text" id="editPayInv" disabled>
     <label>Tanggal Bayar</label><input type="date" id="editPayDate">
     <label>Jumlah Bayar (Rp)</label><input type="number" id="editPayAmount" min="1" step="1">
-    <label>Metode</label><select id="editPayMethod"><option>Transfer</option><option>Tunai</option><option>Giro</option><option>Lainnya</option></select>
+    <label>Metode</label><select id="editPayMethod"><option>Transfer</option><option>Tunai</option><option>Giro</option><option>Lainnya</option><option>Pembulatan</option></select>
     <label>Bank / Ref / Catatan</label><input type="text" id="editPayRef">
     <div class="row"><button class="btn" id="editPayCancel">Batal</button><button class="btn green" id="editPaySave">Simpan</button></div>
   </div>
@@ -205,6 +205,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <div class="tab active" data-pane="dashboard">Dashboard 30 Hari</div>
     <div class="tab" data-pane="piutang">Piutang & Pembayaran</div>
     <div class="tab" data-pane="rincian">Rincian Pembayaran</div>
+    <div class="tab" data-pane="kas">💵 Kas Tunai</div>
     <div class="tab" data-pane="grouping">Grouping</div>
     <div class="tab" data-pane="aging">Aging Piutang</div>
     <div class="tab" data-pane="admin" data-requires="admin">👥 Manajemen User</div>
@@ -270,7 +271,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   <div class="pane" id="pane-piutang">
     <div class="card" data-requires="edit">
       <h2>📥 Import Pembayaran dari Excel</h2>
-      <p class="muted" style="margin-bottom:10px">Kolom wajib: <b>INV</b>, <b>TGL_BAYAR</b>, <b>JUMLAH_BAYAR</b>. Opsional: METODE, BANK, NO_REF, CATATAN.</p>
+      <p class="muted" style="margin-bottom:10px">Kolom wajib: <b>INV</b>, <b>TGL_BAYAR</b>, <b>JUMLAH_BAYAR</b>. Opsional: METODE, BANK, NO_REF, CATATAN. Duplikat dilewati, bayar tidak boleh melebihi sisa piutang, dan sisa &lt; Rp 1.000 otomatis menjadi Pembulatan.</p>
       <div class="form-grid">
         <div><label>File Excel Pembayaran</label><input type="file" id="payFileInput2" accept=".xlsx,.xls,.csv" class="inline-file"></div>
         <div><button type="button" class="btn green" id="btnImportPay" style="width:100%">Import Sekarang</button></div>
@@ -351,6 +352,36 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <h2 style="margin-top:18px">💠 Breakdown per Metode</h2><div class="kpis" id="rinByMethod"></div></div>
     <div class="card"><h2>📈 Grafik per Periode</h2><div class="chart-wrap"><canvas id="chartRincian"></canvas></div></div>
     <div class="card"><h2>📋 Tabel Rincian</h2><div class="scroll"><table id="tblRincian"><thead id="tblRincianHead"></thead><tbody></tbody></table></div></div>
+  </div>
+
+  <!-- KAS TUNAI -->
+  <div class="pane" id="pane-kas">
+    <div class="card">
+      <h2>💵 Posisi Kas Tunai</h2>
+      <p class="muted" style="margin-bottom:10px;font-size:11.5px">Saldo tunai = total pembayaran metode <b>Tunai</b> − total setoran ke bank. Semua tanggal, tidak terpengaruh slicer.</p>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Total Tunai Diterima</div><div class="value" id="kasIn">Rp 0</div></div>
+        <div class="kpi"><div class="label">Sudah Disetor / Transfer ke Bank</div><div class="value green" id="kasOut">Rp 0</div></div>
+        <div class="kpi"><div class="label">Saldo Tunai Dipegang</div><div class="value warn" id="kasSaldo">Rp 0</div></div>
+      </div>
+    </div>
+    <div class="card" data-requires="edit">
+      <h2>🏦 Catat Setoran ke Bank</h2>
+      <div class="form-grid">
+        <div><label>Tanggal Setor</label><input type="date" id="setDate"></div>
+        <div><label>Jumlah Setor (Rp)</label><input type="number" id="setAmount" min="1" step="1" placeholder="0"></div>
+        <div><label>Bank</label><input type="text" id="setBank" placeholder="mis. BCA"></div>
+        <div><label>No. Ref / Catatan</label><input type="text" id="setRef" placeholder="opsional"></div>
+        <div><button type="button" class="btn green" id="btnAddSetor" style="width:100%">Simpan Setoran</button></div>
+      </div>
+      <div class="muted" id="setInfo" style="margin-top:8px;font-size:11.5px"></div>
+    </div>
+    <div class="card"><h2>📒 Buku Kas Harian</h2>
+      <div class="scroll"><table id="tblKasHarian"><thead><tr><th>Tanggal</th><th class="num">Tunai Masuk</th><th class="num">Setor ke Bank</th><th class="num">Saldo Berjalan</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card"><h2>🧾 Riwayat Setoran</h2>
+      <div class="scroll"><table id="tblSetor"><thead><tr><th>#</th><th>Tanggal</th><th class="num">Jumlah</th><th>Bank</th><th>Ref / Catatan</th><th class="admin-only">Aksi</th></tr></thead><tbody></tbody></table></div>
+    </div>
   </div>
 
   <!-- GROUPING -->
@@ -452,7 +483,7 @@ fsdb.enablePersistence({synchronizeTabs:true}).catch(e => console.warn('persiste
    STATE
 ============================================================ */
 const state = {
-  raw:[], clean:[], payments:[], piutang:[], profiles:[],
+  raw:[], clean:[], payments:[], setoran:[], piutang:[], profiles:[],
   invMap: new Map(),
   _outstanding:null, _lastMethodSig:'',
   _uid:null, _email:null, role:null,
@@ -517,6 +548,20 @@ function toast(msg, ms=2400){
   clearTimeout(t._tm); t._tm = setTimeout(()=>t.classList.remove('show'), ms);
 }
 function addDays(d, n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+
+/* Pembulatan: sisa piutang < Rp 1.000 (mis. 999) otomatis ditutup sebagai pembayaran metode "Pembulatan" */
+const ROUND_LIMIT = 1000;
+const ROUND_METHOD = 'Pembulatan';
+function roundingAmount(sisa){
+  const r = Math.round((sisa||0)*100)/100;
+  return (r > 0.5 && r < ROUND_LIMIT) ? r : 0;
+}
+/* Kunci duplikat baris penjualan */
+function saleKey(r){
+  const t = v => String(v ?? '').trim().toUpperCase();
+  const n = v => Math.round((Number(v)||0)*100);
+  return [t(r.inv), dateKey(r.date), t(r.custCode), t(r.item), t(r.line), n(r.jumlah), n(r.pcs), n(r.diskon)].join('|');
+}
 
 /* ============================================================
    ROLE HELPERS
@@ -621,7 +666,7 @@ document.getElementById('btnLogout').onclick = () => auth.signOut();
 auth.onAuthStateChanged(async user => {
   if(!user){
     state._uid = null; state.role = null; state._email = null;
-    state.clean = []; state.payments = []; state.piutang = []; state.profiles = [];
+    state.clean = []; state.payments = []; state.setoran = []; state.piutang = []; state.profiles = [];
     state.invMap.clear();
     renderAll();
     showAuth();
@@ -714,6 +759,19 @@ async function fetchData() {
       return { _id: doc.id, id: doc.id, inv: d.inv, date: d.date ? d.date.toDate() : null,
         amount: d.amount||0, method: d.method||'Transfer', bank: d.bank||'', ref: d.ref||'', catatan: d.catatan||'' };
     });
+
+    try {
+      const setSnap = await fsdb.collection('setoran').get();
+      state.setoran = setSnap.docs.map(doc => {
+        const d = doc.data();
+        return { _id: doc.id, date: d.date ? d.date.toDate() : null, amount: d.amount||0,
+          bank: d.bank||'', ref: d.ref||'', catatan: d.catatan||'' };
+      });
+    } catch(e){
+      console.warn('Setoran fetch error:', e.message);
+      state.setoran = [];
+      toast('⚠️ Koleksi "setoran" belum bisa dibaca — cek Firestore Rules', 5000);
+    }
 
     rebuildInvMap();
     hitungPiutang();
@@ -885,8 +943,25 @@ document.getElementById('fileInput').addEventListener('change', e => {
         mode = ok ? 'append' : 'replace';
       }
       if(mode === 'replace') await fireDeleteAll();
-      await fireBulkWriteSales(result);
-      toast(`✅ ${result.length} baris terkirim`);
+
+      // Skip duplikat: (1) sama dengan data yang sudah ada, (2) kembar di dalam file
+      const existing = new Set(mode==='append' ? state.clean.map(saleKey) : []);
+      const seen = new Set();
+      const fresh = [];
+      let skipDB = 0, skipFile = 0;
+      for(const r of result){
+        const k = saleKey(r);
+        if(existing.has(k)){ skipDB++; continue; }
+        if(seen.has(k)){ skipFile++; continue; }
+        seen.add(k); fresh.push(r);
+      }
+      if(!fresh.length){
+        toast(`⚠️ Semua ${result.length} baris duplikat, tidak ada yang diimpor`, 5000);
+        return;
+      }
+      await fireBulkWriteSales(fresh);
+      toast(`✅ ${fresh.length} baris terkirim · 🔁 Duplikat dilewati: ${skipDB+skipFile}` +
+        (skipDB||skipFile ? ` (sudah ada: ${skipDB}, kembar di file: ${skipFile})` : ''), 6000);
       await fetchData();
     } catch(err){ console.error(err); toast('❌ '+err.message, 4500); }
   };
@@ -943,8 +1018,10 @@ async function fireBulkWriteSales(rows){
   }
 }
 async function fireDeleteAll(){
-  for(const col of ['sales','payments']){
-    const snap = await fsdb.collection(col).get();
+  for(const col of ['sales','payments','setoran']){
+    let snap;
+    try { snap = await fsdb.collection(col).get(); }
+    catch(e){ if(col==='setoran') continue; throw e; }
     const docs = snap.docs;
     for(let i=0; i<docs.length; i+=400){
       const batch = fsdb.batch();
@@ -1012,7 +1089,7 @@ function hitungPiutang(){
 ============================================================ */
 function renderAll(){
   refreshSlicerOptions(); updateSlicerInfo();
-  renderDashboard(); renderPiutang(); renderGrouping(); renderAging(); renderRincian();
+  renderDashboard(); renderPiutang(); renderGrouping(); renderAging(); renderRincian(); renderKas();
   if(isAdmin()) renderUserTable();
 }
 function renderActivePane(){
@@ -1021,6 +1098,7 @@ function renderActivePane(){
   if(active==='dashboard') renderDashboard();
   else if(active==='piutang') renderPiutang();
   else if(active==='rincian') renderRincian();
+  else if(active==='kas') renderKas();
   else if(active==='grouping') renderGrouping();
   else if(active==='aging') renderAging();
   else if(active==='admin' && isAdmin()) renderUserTable();
@@ -1240,8 +1318,19 @@ document.getElementById('editPaySave').onclick = async () => {
   const method = document.getElementById('editPayMethod').value;
   const refStr = document.getElementById('editPayRef').value.trim();
   if(!dateStr || !(amount>0)){ toast('Tanggal & jumlah wajib valid'); return; }
+  const cur = state.payments.find(x => x._id === id);
+  const invTotal = cur && state.invMap.get(cur.inv) ? state.invMap.get(cur.inv).total : null;
+  let remAfter = 0;
+  if(cur && invTotal !== null){
+    const others = state.payments.filter(x => x.inv === cur.inv && x._id !== id).reduce((a,x)=>a+(x.amount||0),0);
+    const maxAmt = invTotal - others;
+    if(amount > maxAmt + 0.5){ toast(`Melebihi piutang (maks ${fmtRp(maxAmt)})`, 3500); return; }
+    if(method !== ROUND_METHOD) remAfter = roundingAmount(maxAmt - amount);
+  }
   try {
-    await fireUpdatePayment(id, {date:new Date(dateStr+'T00:00:00'), amount, method, ref:refStr, bank:'', catatan:''});
+    const payDate = new Date(dateStr+'T00:00:00');
+    await fireUpdatePayment(id, {date:payDate, amount, method, ref:refStr, bank:'', catatan:''});
+    if(remAfter > 0) await fireAddPayment({inv:cur.inv, date:payDate, amount:remAfter, method:ROUND_METHOD, ref:'', bank:'', catatan:'Pembulatan otomatis'});
     document.getElementById('editPayModal').classList.remove('show');
     toast('✅ Pembayaran diperbarui');
     await fetchData();
@@ -1343,12 +1432,15 @@ document.getElementById('btnAddPay').onclick = async e => {
     if(!p){ toast('Invoice tidak ditemukan'); return; }
     if(amount > p.sisa+0.5){ toast(`Melebihi sisa (${fmtRp(p.sisa)})`); return; }
 
-    await fireAddPayment({inv, date:new Date(dateStr+'T00:00:00'), amount, method, ref, bank:'', catatan:''});
+    const payDate = new Date(dateStr+'T00:00:00');
+    await fireAddPayment({inv, date:payDate, amount, method, ref, bank:'', catatan:''});
+    const rem = roundingAmount(p.sisa - amount);
+    if(rem > 0) await fireAddPayment({inv, date:payDate, amount:rem, method:ROUND_METHOD, ref:'', bank:'', catatan:'Pembulatan otomatis'});
     document.getElementById('payAmount').value = '';
     document.getElementById('payRef').value = '';
     selectedInv=''; invSearch.value='';
     document.getElementById('paySelectedInfo').innerHTML = '';
-    toast('✅ Pembayaran disimpan');
+    toast(rem > 0 ? `✅ Pembayaran disimpan · Pembulatan ${fmtRp(rem)} dicatat` : '✅ Pembayaran disimpan', rem>0?4000:2400);
     await fetchData();
   } catch(err){ console.error(err); toast('❌ '+err.message, 4000); }
 };
@@ -1418,6 +1510,8 @@ async function handlePayFile(file, reportEl){
       });
       
       const seenInFile = new Set();
+      const existingPay = new Set(state.payments.map(p => `${String(p.inv).trim()}|${dateKey(p.date)}|${p.amount}`));
+      const lastDateByInv = new Map();
       const toWrite = [];
       
       for(let i=0; i<rows.length; i++){
@@ -1465,6 +1559,11 @@ async function handlePayFile(file, reportEl){
           if(details.length < 20) details.push(`Baris ${i+2}: DUPLIKAT dalam file (INV ${invKey}, ${dateKey(d)}, Rp ${fmtNum(nominal)})`);
           continue;
         }
+        if(existingPay.has(dupKey)){
+          skipDup++;
+          if(details.length < 20) details.push(`Baris ${i+2}: DUPLIKAT dengan pembayaran yang sudah ada (INV ${invKey}, ${dateKey(d)}, Rp ${fmtNum(nominal)})`);
+          continue;
+        }
         seenInFile.add(dupKey);
         
         const sudah = paidNow.get(invKey) || 0;
@@ -1484,7 +1583,21 @@ async function handlePayFile(file, reportEl){
           bank, ref, catatan
         });
         paidNow.set(invKey, sudah + nominal); 
+        const ld = lastDateByInv.get(invKey);
+        if(!ld || d > ld) lastDateByInv.set(invKey, d);
         ok++;
+      }
+
+      // Pembulatan otomatis: sisa < Rp 1.000 setelah pembayaran dicatat sebagai "Pembulatan"
+      let roundCount = 0, roundTotal = 0;
+      for(const [invKey, ld] of lastDateByInv){
+        const p = invIndex.get(invKey);
+        const rem = roundingAmount((p.total||0) - (paidNow.get(invKey)||0));
+        if(rem > 0){
+          toWrite.push({inv: invKey, date: ld, amount: rem, method: ROUND_METHOD, bank:'', ref:'', catatan:'Pembulatan otomatis'});
+          paidNow.set(invKey, (paidNow.get(invKey)||0) + rem);
+          roundCount++; roundTotal += rem;
+        }
       }
       
       console.log('📥 Import Pembayaran - Valid:', ok, 'Skip:', {skipNoInv, skipOver, skipBad, skipDup});
@@ -1505,7 +1618,7 @@ async function handlePayFile(file, reportEl){
         }
       }
       
-      const msg = `✅ Berhasil: ${ok} · ⚠️ INV tidak ada: ${skipNoInv} · ⚠️ Melebihi sisa: ${skipOver} · ⚠️ Format salah: ${skipBad} · 🔁 Duplikat: ${skipDup}`;
+      const msg = `✅ Berhasil: ${ok} · ⚠️ INV tidak ada: ${skipNoInv} · ⚠️ Melebihi sisa: ${skipOver} · ⚠️ Format salah: ${skipBad} · 🔁 Duplikat: ${skipDup} · 🔘 Pembulatan: ${roundCount} (Rp ${fmtNum(roundTotal)})`;
       toast(msg, 6000);
       
       if(reportEl) {
@@ -1547,6 +1660,76 @@ newBtnImportPay.onclick = async () => {
   await handlePayFile(file, document.getElementById('importPayResult'));
   fileInput.value = '';
 };
+
+/* ============================================================
+   KAS TUNAI (saldo dipegang vs setoran ke bank)
+============================================================ */
+function kasTotals(){
+  const tunai = state.payments.filter(p => String(p.method||'').trim().toLowerCase()==='tunai');
+  const masuk = tunai.reduce((a,p)=>a+(p.amount||0),0);
+  const keluar = state.setoran.reduce((a,x)=>a+(x.amount||0),0);
+  return {tunai, masuk, keluar, saldo: masuk-keluar};
+}
+function renderKas(){
+  const {tunai, masuk, keluar, saldo} = kasTotals();
+  document.getElementById('kasIn').textContent = fmtRp(masuk);
+  document.getElementById('kasOut').textContent = fmtRp(keluar);
+  const sEl = document.getElementById('kasSaldo');
+  sEl.textContent = fmtRp(saldo);
+  sEl.className = 'value ' + (saldo < -0.5 ? 'danger' : 'warn');
+  document.getElementById('setInfo').textContent = `Saldo tunai saat ini ${fmtRp(saldo)} — setoran tidak boleh melebihi saldo.`;
+  const sa = document.getElementById('setAmount'); if(sa) sa.max = Math.max(saldo,0);
+
+  // buku kas harian
+  const days = new Map();
+  const get = k => { let o = days.get(k); if(!o){ o = {in:0,out:0}; days.set(k,o); } return o; };
+  tunai.forEach(p => { if(p.date) get(dateKey(p.date)).in += p.amount||0; });
+  state.setoran.forEach(x => { if(x.date) get(dateKey(x.date)).out += x.amount||0; });
+  const keys = [...days.keys()].sort();
+  let run = 0;
+  const rows = keys.map(k => { const o = days.get(k); run += o.in - o.out; return {k, ...o, run}; }).reverse();
+  document.querySelector('#tblKasHarian tbody').innerHTML = rows.length
+    ? rows.map(r => `<tr><td>${r.k}</td><td class="num">${fmtRp(r.in)}</td><td class="num">${fmtRp(r.out)}</td><td class="num"><b>${fmtRp(r.run)}</b></td></tr>`).join('')
+    : `<tr><td colspan="4" class="empty">Belum ada pembayaran tunai / setoran</td></tr>`;
+
+  // riwayat setoran
+  const list = [...state.setoran].sort((a,b)=> (b.date||0)-(a.date||0));
+  document.querySelector('#tblSetor tbody').innerHTML = list.length
+    ? list.map((x,i) => `<tr><td>${i+1}</td><td>${dateKey(x.date)}</td><td class="num">${fmtRp(x.amount)}</td><td>${x.bank||'-'}</td><td>${[x.ref,x.catatan].filter(Boolean).join(' · ')||'-'}</td>
+        <td class="row-action"><button class="btn danger" data-delsetor="${x._id}" style="padding:3px 8px;font-size:11px">🗑️</button></td></tr>`).join('')
+    : `<tr><td colspan="6" class="empty">Belum ada setoran</td></tr>`;
+  applyRoleUI();
+}
+
+document.getElementById('btnAddSetor').onclick = async e => {
+  if(e){ e.preventDefault(); e.stopPropagation(); }
+  if(!canEdit()){ toast('Akses ditolak'); return; }
+  const dateStr = document.getElementById('setDate').value;
+  const amount = toNum(document.getElementById('setAmount').value);
+  const bank = document.getElementById('setBank').value.trim();
+  const ref = document.getElementById('setRef').value.trim();
+  if(!dateStr){ toast('Isi tanggal setor'); return; }
+  if(!(amount>0)){ toast('Jumlah setor harus > 0'); return; }
+  const {saldo} = kasTotals();
+  if(amount > saldo + 0.5){ toast(`Melebihi saldo tunai (${fmtRp(saldo)})`, 3500); return; }
+  try {
+    await fsdb.collection('setoran').add({
+      date: firebase.firestore.Timestamp.fromDate(new Date(dateStr+'T00:00:00')),
+      amount, bank, ref, catatan:''
+    });
+    document.getElementById('setAmount').value = '';
+    document.getElementById('setRef').value = '';
+    toast('✅ Setoran disimpan');
+    await fetchData();
+  } catch(err){ console.error(err); toast('❌ '+err.message, 4500); }
+};
+document.querySelector('#tblSetor').addEventListener('click', async e => {
+  const b = e.target.closest('[data-delsetor]'); if(!b) return;
+  if(!canEdit()) return;
+  if(!confirm('Hapus setoran ini? Saldo tunai akan bertambah kembali.')) return;
+  try { await fsdb.collection('setoran').doc(b.dataset.delsetor).delete(); toast('Setoran dihapus'); await fetchData(); }
+  catch(err){ toast('❌ '+err.message, 4000); }
+});
 
 /* ============================================================
    RINCIAN PEMBAYARAN
@@ -1855,7 +2038,7 @@ function downloadPayTemplate(){
     ['2. Opsional: METODE, BANK, NO_REF, CATATAN'],
     ['3. Format tanggal: YYYY-MM-DD atau DD/MM/YYYY'],
     ['4. INV harus ada di data penjualan'],
-    ['5. JUMLAH_BAYAR ≤ sisa piutang'],
+    ['5. JUMLAH_BAYAR ≤ sisa piutang'],['6. Sisa < Rp 1.000 otomatis dicatat sebagai Pembulatan'],['7. Baris duplikat (INV + TGL + JUMLAH sama) dilewati'],
     ['6. Untuk CICILAN, tulis beberapa baris dengan INV yang sama.'],
     ['   Pastikan total cicilan ≤ nilai invoice.'],[''],
     ['Contoh Cicilan:'],
@@ -1880,7 +2063,8 @@ document.getElementById('btnSaveJson').onclick = () => {
   const payload = {
     v:3, savedAt:new Date().toISOString(),
     clean: state.clean.map(r=>({...r, _id:undefined, date:r.date?r.date.toISOString():null})),
-    payments: state.payments.map(p=>({...p, _id:undefined, id:undefined, date:p.date?p.date.toISOString():null}))
+    payments: state.payments.map(p=>({...p, _id:undefined, id:undefined, date:p.date?p.date.toISOString():null})),
+    setoran: state.setoran.map(x=>({...x, _id:undefined, date:x.date?x.date.toISOString():null}))
   };
   const blob = new Blob([JSON.stringify(payload)], {type:'application/json'});
   const a = document.createElement('a');
@@ -1905,6 +2089,7 @@ document.getElementById('jsonFileInput').addEventListener('change', async e => {
       inv:p.inv, date:d(p.date), amount:p.amount||0, method:p.method||'Transfer',
       bank:p.bank||'', ref:p.ref||'', catatan:p.catatan||''
     })).filter(p=>p.inv && p.date);
+    const setor = (obj.setoran||[]).map(x=>({date:d(x.date), amount:x.amount||0, bank:x.bank||'', ref:x.ref||'', catatan:x.catatan||''})).filter(x=>x.date && x.amount>0);
     if(!clean.length && !pays.length){ toast('JSON kosong'); return; }
     const mode = confirm(`JSON berisi ${clean.length} baris + ${pays.length} pembayaran.\n\nOK = TAMBAH\nCancel = GANTI SEMUA`);
     if(!mode) await fireDeleteAll();
@@ -1921,7 +2106,17 @@ document.getElementById('jsonFileInput').addEventListener('change', async e => {
         await batch.commit();
       }
     }
-    toast(`📂 Restore sukses (${clean.length} baris + ${pays.length} bayar)`, 3500);
+    if(setor.length){
+      const col = fsdb.collection('setoran');
+      for(let i=0; i<setor.length; i+=400){
+        const batch = fsdb.batch();
+        setor.slice(i,i+400).forEach(x=>{
+          batch.set(col.doc(), {date:firebase.firestore.Timestamp.fromDate(x.date), amount:x.amount, bank:x.bank, ref:x.ref, catatan:x.catatan});
+        });
+        await batch.commit();
+      }
+    }
+    toast(`📂 Restore sukses (${clean.length} baris + ${pays.length} bayar + ${setor.length} setoran)`, 3500);
     await fetchData();
   } catch(err){ toast('❌ '+err.message, 4500); }
   e.target.value = '';
@@ -1932,7 +2127,7 @@ document.getElementById('jsonFileInput').addEventListener('change', async e => {
 ============================================================ */
 document.getElementById('btnReset').onclick = async () => {
   if(!isAdmin()){ toast('Hanya admin'); return; }
-  if(!confirm('Reset SEMUA data (sales + payments) dari Firestore? Tidak bisa dibatalkan.')) return;
+  if(!confirm('Reset SEMUA data (sales + payments + setoran) dari Firestore? Tidak bisa dibatalkan.')) return;
   try {
     await fireDeleteAll();
     selectedInv = '';

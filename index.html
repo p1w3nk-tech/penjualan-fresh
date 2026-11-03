@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Data Penjualan 2026 — Multi-Role Dashboard</title>
+<title>Data Penjualan 2026 — Multi-Role Dashboard (Optimized)</title>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -24,6 +24,7 @@ header .sub{color:#e0f2fe;font-size:12px;opacity:.9}
 .btn.green{background:var(--accent2);color:#052e16;border-color:var(--accent2);font-weight:600}
 .btn.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
 .btn.purple{background:#8b5cf6;color:#fff;border-color:#8b5cf6;font-weight:600}
+.btn:disabled{opacity:.5;cursor:not-allowed}
 .file-label{display:inline-flex;align-items:center;gap:8px}
 input[type=file]{display:none}
 .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:18px}
@@ -117,6 +118,12 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .modal input,.modal select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:7px;font-size:13px}
 .modal .row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
 [data-requires][style*="display:none"]{display:none!important}
+/* PAGINATION */
+.pagination{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--muted)}
+.pagination .controls{display:flex;gap:6px}
+.pagination button{padding:5px 10px;border-radius:6px;background:var(--panel2);border:1px solid var(--border);color:var(--text);cursor:pointer}
+.pagination button:disabled{opacity:.4;cursor:not-allowed}
+.pagination button:hover:not(:disabled){background:#334155;border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -179,6 +186,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       💳 Import Pembayaran
       <input type="file" id="payFileInput" accept=".xlsx,.xls,.csv">
     </label>
+    <button class="btn" id="btnRefresh" style="border-color:#f59e0b;color:#f59e0b">🔄 Refresh Data</button>
     <button class="btn" id="btnSample" data-requires="admin">Muat Contoh Data</button>
     <button class="btn" id="btnTemplatePay">📄 Template Pembayaran</button>
     <button class="btn green" id="btnExport">💾 Export Semua</button>
@@ -297,6 +305,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
           <th>Status</th><th>Tgl Allowance</th><th>Tgl Bayar</th><th>Umur</th><th class="admin-only">Aksi</th></tr></thead>
         <tbody></tbody>
       </table></div>
+      <div class="pagination" id="pagPiutang">
+        <span id="pagPiutangInfo">Menampilkan 0-0 dari 0</span>
+        <div class="controls">
+          <button id="pagPiutangPrev" disabled>‹ Prev</button>
+          <button id="pagPiutangNext" disabled>Next ›</button>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -305,6 +320,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
         <thead><tr><th>#</th><th>Invoice</th><th>Tanggal</th><th class="num">Jumlah</th><th>Metode</th><th>Bank / Ref / Catatan</th><th class="admin-only">Aksi</th></tr></thead>
         <tbody></tbody>
       </table></div>
+      <div class="pagination" id="pagPay">
+        <span id="pagPayInfo">Menampilkan 0-0 dari 0</span>
+        <div class="controls">
+          <button id="pagPayPrev" disabled>‹ Prev</button>
+          <button id="pagPayNext" disabled>Next ›</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -434,8 +456,12 @@ const state = {
   invMap: new Map(),
   _outstanding:null, _lastMethodSig:'',
   _uid:null, _email:null, role:null,
-  _unsubSales:null, _unsubPays:null, _unsubProfiles:null,
-  _bootstrapped:false
+  _bootstrapped:false,
+  // Pagination state
+  pag: {
+    piutang: { page: 1, pageSize: 50, total: 0 },
+    pay: { page: 1, pageSize: 50, total: 0 }
+  }
 };
 
 const ALLOWANCE_DAYS = 30;
@@ -508,15 +534,12 @@ function applyRoleUI(){
     else if(req === 'edit') show = canEdit();
     el.style.display = show ? '' : 'none';
   });
-  // Kolom aksi tabel
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = canEdit() ? '' : 'none';
   });
-  // Sembunyikan tombol aksi di tabel piutang/pembayaran untuk viewer
   document.querySelectorAll('.row-action').forEach(el => {
     el.style.display = canEdit() ? '' : 'none';
   });
-  // Info role di header
   const badge = document.getElementById('authUserRole');
   if(badge && state.role){
     badge.className = 'badge role-' + state.role;
@@ -599,10 +622,6 @@ document.getElementById('btnLogout').onclick = () => auth.signOut();
 auth.onAuthStateChanged(async user => {
   if(!user){
     state._uid = null; state.role = null; state._email = null;
-    if(state._unsubSales) state._unsubSales();
-    if(state._unsubPays) state._unsubPays();
-    if(state._unsubProfiles) state._unsubProfiles();
-    state._unsubSales = state._unsubPays = state._unsubProfiles = null;
     state.clean = []; state.payments = []; state.piutang = []; state.profiles = [];
     state.invMap.clear();
     renderAll();
@@ -611,7 +630,6 @@ auth.onAuthStateChanged(async user => {
     return;
   }
   
-  // Ekstrak username dari email (misal: "budi@dashboard.local" jadi "budi")
   const userUsername = (user.email || '').split('@')[0];
 
   try {
@@ -622,7 +640,6 @@ auth.onAuthStateChanged(async user => {
     } catch(e){ console.warn('profile read:', e.message); }
 
     if(!profile){
-      // Bootstrap admin: cek apakah username cocok
       if(userUsername === BOOTSTRAP_ADMIN_USERNAME.toLowerCase()){
         try {
           await fsdb.doc(`profiles/${user.uid}`).set({
@@ -633,7 +650,7 @@ auth.onAuthStateChanged(async user => {
         } catch(e){
           console.error('bootstrap create fail:', e);
           await auth.signOut();
-          showAuthError('Gagal membuat profil admin: ' + e.message + ' — cek Firestore Rules (lihat panduan).');
+          showAuthError('Gagal membuat profil admin: ' + e.message + ' — cek Firestore Rules.');
           return;
         }
       }
@@ -659,7 +676,11 @@ auth.onAuthStateChanged(async user => {
     hideAuth();
     applyRoleUI();
     document.getElementById('statusText').textContent = `Login sebagai ${ROLE_LABEL[state.role]}`;
-    attachRealtimeListeners();
+    
+    // ONE-TIME FETCH: Load data awal
+    await fetchData(); 
+    
+    if(isAdmin()) fetchProfiles();
   } catch(e){
     console.error(e);
     showAuthError('Error: ' + authMsg(e));
@@ -667,18 +688,21 @@ auth.onAuthStateChanged(async user => {
 });
 
 /* ============================================================
-   REALTIME LISTENERS
+   DATA FETCHING (ONE-TIME FETCH)
 ============================================================ */
-function setSyncState(mode){ syncDot.className = 'sync-dot' + (mode==='live'?' live':mode==='err'?' err':''); }
+let isFetching = false;
 
-let _salesT=null, _payT=null;
-function attachRealtimeListeners(){
-  if(!state._uid) return;
-
-  if(state._unsubSales) state._unsubSales();
-  state._unsubSales = fsdb.collection('sales').onSnapshot(snap => {
-    setSyncState('live');
-    state.clean = snap.docs.map(doc => {
+async function fetchData() {
+  if (isFetching) return;
+  isFetching = true;
+  document.getElementById('statusText').textContent = '⏳ Memuat data...';
+  setSyncState('loading');
+  
+  try {
+    // 1. Fetch Sales (dengan limit / filter jika diperlukan)
+    // Catatan: Jika data sangat besar, tambahkan .limit(5000) atau filter where('tahun','==', '2026')
+    const salesSnap = await fsdb.collection('sales').get();
+    state.clean = salesSnap.docs.map(doc => {
       const d = doc.data();
       return {
         _id: doc.id, inv: d.inv, custCode: d.custCode||'', custName: d.custName||'',
@@ -687,31 +711,44 @@ function attachRealtimeListeners(){
         jumlah: d.jumlah||0, pcs: d.pcs||0, diskon: d.diskon||0
       };
     });
-    rebuildInvMap();
-    clearTimeout(_salesT);
-    _salesT = setTimeout(()=>{ hitungPiutang(); renderActivePane(); updateStatusCount(); }, 80);
-  }, err => { console.error('sales:',err); setSyncState('err'); toast('❌ '+err.message, 4000); });
 
-  if(state._unsubPays) state._unsubPays();
-  state._unsubPays = fsdb.collection('payments').onSnapshot(snap => {
-    setSyncState('live');
-    state.payments = snap.docs.map(doc => {
+    // 2. Fetch Payments
+    const paySnap = await fsdb.collection('payments').get();
+    state.payments = paySnap.docs.map(doc => {
       const d = doc.data();
       return { _id: doc.id, id: doc.id, inv: d.inv, date: d.date ? d.date.toDate() : null,
         amount: d.amount||0, method: d.method||'Transfer', bank: d.bank||'', ref: d.ref||'', catatan: d.catatan||'' };
     });
-    clearTimeout(_payT);
-    _payT = setTimeout(()=>{ hitungPiutang(); renderActivePane(); updateStatusCount(); }, 80);
-  }, err => { console.error('pays:',err); setSyncState('err'); toast('❌ '+err.message, 4000); });
 
-  // Profiles listener (untuk manajemen user)
-  if(state._unsubProfiles) state._unsubProfiles();
-  if(isAdmin()){
-    state._unsubProfiles = fsdb.collection('profiles').onSnapshot(snap => {
-      state.profiles = snap.docs.map(d => ({_id:d.id, ...d.data()}));
-      renderUserTable();
-    }, err => console.warn('profiles:', err.message));
+    rebuildInvMap();
+    hitungPiutang();
+    renderAll();
+    updateStatusCount();
+    setSyncState('live');
+    
+  } catch (err) {
+    console.error('Fetch error:', err);
+    toast('❌ Gagal memuat data: ' + err.message, 4000);
+    setSyncState('err');
+  } finally {
+    isFetching = false;
+    document.getElementById('statusText').textContent = `Login sebagai ${ROLE_LABEL[state.role] || ''} · Data dimuat`;
   }
+}
+
+async function fetchProfiles() {
+  if (!isAdmin()) return;
+  try {
+    const snap = await fsdb.collection('profiles').get();
+    state.profiles = snap.docs.map(d => ({_id:d.id, ...d.data()}));
+    renderUserTable();
+  } catch (err) {
+    console.warn('Profiles fetch error:', err.message);
+  }
+}
+
+function setSyncState(mode){
+  syncDot.className = 'sync-dot' + (mode==='live'?' live':mode==='err'?' err':mode==='loading'?'':'');
 }
 
 function updateStatusCount(){
@@ -730,11 +767,18 @@ function rebuildInvMap(){
   state.invMap = map;
 }
 
+// Tombol Refresh Manual
+document.getElementById('btnRefresh').onclick = async () => {
+  if (!state._uid) { toast('Silakan login dulu'); return; }
+  toast('🔄 Memuat ulang data...', 1500);
+  await fetchData();
+  if (isAdmin()) fetchProfiles();
+};
+
 /* ============================================================
    USER MANAGEMENT (ADMIN ONLY)
 ============================================================ */
 async function adminCreateUser(username, password, role){
-  // Gunakan secondary Firebase App agar sesi admin tidak logout
   const appName = 'creator-' + Date.now();
   const secondaryApp = firebase.initializeApp(firebaseConfig, appName);
   const secAuth = secondaryApp.auth();
@@ -743,7 +787,6 @@ async function adminCreateUser(username, password, role){
     const uid = cred.user.uid;
     await cred.user.updateProfile({ displayName: username });
     await secAuth.signOut();
-    // Admin menulis profile (rules: hanya admin yang boleh)
     await fsdb.doc(`profiles/${uid}`).set({
       email: username, role,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -773,6 +816,7 @@ document.getElementById('btnCreateUser').onclick = async () => {
     msg.innerHTML = `<span style="color:#86efac">✅ User <b>${uname}</b> dibuat sebagai ${ROLE_LABEL[role]}</span>`;
     document.getElementById('newUserEmail').value = '';
     document.getElementById('newUserPass').value = '';
+    fetchProfiles();
   } catch(e){
     console.error(e);
     if(e.code === 'auth/email-already-in-use') {
@@ -819,7 +863,7 @@ function renderUserTable(){
       const uid = btn.dataset.deluid;
       if(uid === state._uid){ toast('Tidak bisa menghapus diri sendiri'); return; }
       if(!confirm('Nonaktifkan user ini? Mereka tidak akan bisa login lagi.')) return;
-      try { await fsdb.doc(`profiles/${uid}`).delete(); toast('User dinonaktifkan'); }
+      try { await fsdb.doc(`profiles/${uid}`).delete(); toast('User dinonaktifkan'); fetchProfiles(); }
       catch(e){ toast('❌ '+e.message, 4000); }
     };
   });
@@ -849,6 +893,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
       if(mode === 'replace') await fireDeleteAll();
       await fireBulkWriteSales(result);
       toast(`✅ ${result.length} baris terkirim`);
+      await fetchData(); // Refresh data setelah import
     } catch(err){ console.error(err); toast('❌ '+err.message, 4500); }
   };
   reader.readAsArrayBuffer(f);
@@ -964,10 +1009,13 @@ function hitungPiutang(){
   }
   list.sort((a,b)=> b.sisa-a.sisa);
   state.piutang = list;
+  // Update pagination totals
+  state.pag.piutang.total = list.length;
+  state.pag.pay.total = state.payments.length;
 }
 
 /* ============================================================
-   RENDER
+   RENDER (DENGAN PAGINASI)
 ============================================================ */
 function renderAll(){
   refreshSlicerOptions(); updateSlicerInfo();
@@ -1083,7 +1131,7 @@ function renderChart(labels, pen, pay){
 }
 
 /* ============================================================
-   PIUTANG RENDER
+   PIUTANG RENDER (DENGAN PAGINASI)
 ============================================================ */
 function umurLabel(u){
   if(u>0) return `<span class="umur-bad">+${u} hari</span>`;
@@ -1093,8 +1141,15 @@ function umurLabel(u){
 
 function renderPiutang(){
   const V = getView();
+  const pg = state.pag.piutang;
+  
+  // Render Tabel Piutang (terpaginasi)
+  const start = (pg.page - 1) * pg.pageSize;
+  const end = Math.min(start + pg.pageSize, V.piutang.length);
+  const pageItems = V.piutang.slice(start, end);
+  
   const tb = document.querySelector('#tblPiutang tbody');
-  tb.innerHTML = V.piutang.length ? V.piutang.map(p => {
+  tb.innerHTML = pageItems.length ? pageItems.map(p => {
     const actionCell = canEdit()
       ? `<td class="row-action"><button class="btn danger" data-delinv="${p.inv}" style="padding:3px 8px;font-size:11px" title="Hapus invoice + pembayaran">🗑️</button></td>`
       : (canEdit()?'':'');
@@ -1111,25 +1166,27 @@ function renderPiutang(){
     </tr>`;
   }).join('') : `<tr><td colspan="${canEdit()?10:9}" class="empty">Belum ada data</td></tr>`;
 
-  const openInv = state.piutang.filter(p => p.sisa>0.5);
-  if(selectedInv){
-    const p = state.piutang.find(x=>x.inv===selectedInv);
-    if(!p || p.sisa<=0.5){ selectedInv=''; document.getElementById('payInvSearch').value=''; document.getElementById('paySelectedInfo').innerHTML=''; }
-    else pickInv(p);
-  }
-  document.getElementById('payHint').textContent = openInv.length
-    ? `${openInv.length} invoice belum lunas · total sisa ${fmtRp(openInv.reduce((s,p)=>s+p.sisa,0))}`
-    : 'Semua invoice sudah lunas 🎉';
+  // Update Pagination Info
+  document.getElementById('pagPiutangInfo').textContent = 
+    `Menampilkan ${V.piutang.length ? start+1 : 0}-${end} dari ${V.piutang.length} data`;
+  document.getElementById('pagPiutangPrev').disabled = pg.page <= 1;
+  document.getElementById('pagPiutangNext').disabled = end >= V.piutang.length;
+
+  // Render Tabel Pembayaran (terpaginasi)
+  const pgPay = state.pag.pay;
+  const startPay = (pgPay.page - 1) * pgPay.pageSize;
+  const endPay = Math.min(startPay + pgPay.pageSize, V.paysByInv.length);
+  const pagePayItems = V.paysByInv.slice(startPay, endPay);
 
   const tb2 = document.querySelector('#tblPay tbody');
-  tb2.innerHTML = V.paysByInv.length ? V.paysByInv.map((p,i)=>{
+  tb2.innerHTML = pagePayItems.length ? pagePayItems.map((p,i)=>{
     const action = canEdit()
       ? `<td class="row-action" style="white-space:nowrap">
            <button class="btn" data-editpay="${p._id}" style="padding:3px 8px;font-size:11px" title="Edit">✏️</button>
            <button class="btn danger" data-delpay="${p._id}" style="padding:3px 8px;font-size:11px" title="Hapus">🗑️</button>
          </td>` : '';
     return `<tr>
-      <td>${i+1}</td><td>${p.inv}</td>
+      <td>${startPay+i+1}</td><td>${p.inv}</td>
       <td>${dateKey(p.date)}</td>
       <td class="num">${fmtRp(p.amount)}</td>
       <td>${p.method}</td>
@@ -1137,17 +1194,37 @@ function renderPiutang(){
       ${action}
     </tr>`;
   }).join('') : `<tr><td colspan="${canEdit()?7:6}" class="empty">Belum ada pembayaran</td></tr>`;
+
+  // Update Pagination Info Pembayaran
+  document.getElementById('pagPayInfo').textContent = 
+    `Menampilkan ${V.paysByInv.length ? startPay+1 : 0}-${endPay} dari ${V.paysByInv.length} data`;
+  document.getElementById('pagPayPrev').disabled = pgPay.page <= 1;
+  document.getElementById('pagPayNext').disabled = endPay >= V.paysByInv.length;
+
+  // Update hint & selected inv
+  const openInv = state.piutang.filter(p => p.sisa>0.5);
+  document.getElementById('payHint').textContent = openInv.length
+    ? `${openInv.length} invoice belum lunas · total sisa ${fmtRp(openInv.reduce((s,p)=>s+p.sisa,0))}`
+    : 'Semua invoice sudah lunas 🎉';
 }
 
+// Event listener pagination
+document.getElementById('pagPiutangPrev').onclick = () => { state.pag.piutang.page--; renderPiutang(); };
+document.getElementById('pagPiutangNext').onclick = () => { state.pag.piutang.page++; renderPiutang(); };
+document.getElementById('pagPayPrev').onclick = () => { state.pag.pay.page--; renderPiutang(); };
+document.getElementById('pagPayNext').onclick = () => { state.pag.pay.page++; renderPiutang(); };
+
+// Event listener hapus invoice
 document.querySelector('#tblPiutang').addEventListener('click', async e => {
   const btn = e.target.closest('[data-delinv]'); if(!btn) return;
   if(!canEdit()) return;
   const inv = btn.dataset.delinv;
   if(!confirm(`Hapus invoice ${inv} dan SEMUA pembayarannya?`)) return;
-  try { await fireDeleteInvoice(inv); toast('🗑️ Invoice dihapus'); }
+  try { await fireDeleteInvoice(inv); toast('🗑️ Invoice dihapus'); await fetchData(); }
   catch(err){ toast('❌ '+err.message, 4000); }
 });
 
+// Event listener edit/hapus pembayaran
 document.querySelector('#tblPay').addEventListener('click', async e => {
   if(!canEdit()) return;
   const eb = e.target.closest('[data-editpay]');
@@ -1165,7 +1242,7 @@ document.querySelector('#tblPay').addEventListener('click', async e => {
   }
   if(db){
     if(!confirm('Hapus pembayaran ini?')) return;
-    try { await fireDeletePayment(db.dataset.delpay); toast('Pembayaran dihapus'); }
+    try { await fireDeletePayment(db.dataset.delpay); toast('Pembayaran dihapus'); await fetchData(); }
     catch(err){ toast('❌ '+err.message, 4000); }
   }
 });
@@ -1182,6 +1259,7 @@ document.getElementById('editPaySave').onclick = async () => {
     await fireUpdatePayment(id, {date:new Date(dateStr+'T00:00:00'), amount, method, ref:refStr, bank:'', catatan:''});
     document.getElementById('editPayModal').classList.remove('show');
     toast('✅ Pembayaran diperbarui');
+    await fetchData();
   } catch(err){ toast('❌ '+err.message, 4000); }
 };
 
@@ -1286,6 +1364,7 @@ document.getElementById('btnAddPay').onclick = async e => {
     selectedInv=''; invSearch.value='';
     document.getElementById('paySelectedInfo').innerHTML = '';
     toast('✅ Pembayaran disimpan');
+    await fetchData(); // Refresh
   } catch(err){ console.error(err); toast('❌ '+err.message, 4000); }
 };
 
@@ -1342,6 +1421,7 @@ async function handlePayFile(file, reportEl){
       const msg = `✅ Import: ${ok} berhasil, ${skipNoInv} INV tidak ada, ${skipOver} melebihi sisa, ${skipBad} format salah.`;
       toast(msg, 4000);
       if(reportEl) reportEl.innerHTML = `<b>${msg}</b>` + (details.length ? `<br><span class="muted">${details.slice(0,15).join('<br>')}${details.length>15?`<br>… (${details.length-15} lainnya)`:''}</span>` : '');
+      await fetchData(); // Refresh
     } catch(err){ console.error(err); toast('❌ '+err.message, 4500); }
   };
   reader.readAsArrayBuffer(file);
@@ -1728,6 +1808,7 @@ document.getElementById('jsonFileInput').addEventListener('change', async e => {
       }
     }
     toast(`📂 Restore sukses (${clean.length} baris + ${pays.length} bayar)`, 3500);
+    await fetchData();
   } catch(err){ toast('❌ '+err.message, 4500); }
   e.target.value = '';
 });
@@ -1745,6 +1826,7 @@ document.getElementById('btnReset').onclick = async () => {
     document.getElementById('paySelectedInfo').innerHTML = '';
     document.getElementById('payInvResults').classList.remove('show');
     toast('Data cloud direset');
+    await fetchData();
   } catch(err){ toast('❌ '+err.message, 4000); }
 };
 
@@ -1782,7 +1864,6 @@ document.getElementById('btnSample').onclick = async () => {
     if(!confirm(`Muat ${valid.length} baris contoh ke Firestore?`)) return;
     toast('⏳ Mengunggah contoh…', 3000);
     await fireBulkWriteSales(valid);
-    // Contoh pembayaran
     const payCol = fsdb.collection('payments');
     const batches = [];
     let b = fsdb.batch(), cnt = 0;
@@ -1801,6 +1882,7 @@ document.getElementById('btnSample').onclick = async () => {
     if(cnt > 0) batches.push(b);
     for(const bb of batches) await bb.commit();
     toast('✅ Contoh data + pembayaran terkirim', 3500);
+    await fetchData();
   } catch(err){ toast('❌ '+err.message, 4500); }
 };
 
@@ -1895,6 +1977,9 @@ function applySlicers(){
   SL.minggu = document.getElementById('slMinggu').value;
   SL.sales = document.getElementById('slSales').value.trim();
   SL.cust = document.getElementById('slCust').value.trim();
+  // Reset pagination ke halaman 1 saat filter berubah
+  state.pag.piutang.page = 1;
+  state.pag.pay.page = 1;
   updateSlicerInfo();
   renderActivePane();
 }

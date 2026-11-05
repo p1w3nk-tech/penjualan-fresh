@@ -3,16 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Data Penjualan 2026 — Firebase Firestore (Hemat Kuota)</title>
+<title>Data Penjualan 2026 — Firebase Cloud</title>
 
-<!-- FIREBASE SDK (v10 Modular) -->
+<!-- ============================================================ -->
+<!-- BAGIAN INI ADALAH SDK FIREBASE (JANGAN DIHAPUS)               -->
+<!-- ============================================================ -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import { getFirestore, collection, doc, getDocs, addDoc, deleteDoc, writeBatch, query, orderBy, limit, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   // ============================================================
-  // GANTI DENGAN KONFIGURASI FIREBASE ANDA
+  // ⚠️ GANTI BAGIAN INI DENGAN API/FIREBASE CONFIG MILIK ANDA ⚠️
   // ============================================================
   const firebaseConfig = {
     apiKey: "AIzaSyAaqxrVh4nbCbQjC3zpvmoxb4B6J43TX98",
@@ -24,6 +26,7 @@
   appId: "1:811180291194:web:6ae29f0ecad933ad04b7c3",
   measurementId: "G-C73V7YKFL3"
 };
+  // ============================================================
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
@@ -35,7 +38,7 @@
     else if (err.code == 'unimplemented') console.warn('Browser tidak mendukung cache.');
   });
 
-  // Ekspos fungsi agar bisa dipakai di script utama
+  // Ekspos fungsi Firebase agar bisa dipakai di script utama bawah
   window.fb = {
     auth, db, signInWithEmailAndPassword, signOut, onAuthStateChanged,
     collection, doc, getDocs, addDoc, deleteDoc, writeBatch, query, orderBy, limit
@@ -44,8 +47,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-/* ... (CSS TETAP SAMA SEPERTI ASLINYA) ... */
-:root{--bg:#0f172a;--panel:#1e293b;--panel2:#273449;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#38bdf8;--accent2:#22c55e;--danger:#ef4444;--warn:#f59e0b}
+:root{--bg:#0f172a;--panel:#1e293b;--panel2:#273449;--border:#334155;--text:#e2e8f0;--muted:#94a3b8;--accent:#38bdf8;--accent2:#22c55e;--danger:#ef4444;--warn:#f59e0b;--purple:#8b5cf6}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 header{background:linear-gradient(90deg,#0ea5e9,#6366f1);padding:18px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
@@ -53,15 +55,15 @@ header h1{font-size:20px;font-weight:700}
 header .sub{color:#e0f2fe;font-size:12px;opacity:.9}
 .container{padding:20px 24px;max-width:1600px;margin:0 auto}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
-.btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;transition:.15s}
+.btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
 .btn:hover{background:#334155;border-color:var(--accent)}
 .btn.primary{background:var(--accent);color:#0f172a;border-color:var(--accent);font-weight:600}
 .btn.green{background:var(--accent2);color:#052e16;border-color:var(--accent2);font-weight:600}
 .btn.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
-.btn.purple{background:#8b5cf6;color:#fff;border-color:#8b5cf6;font-weight:600}
-.btn.orange{background:#f59e0b;color:#0f172a;border-color:#f59e0b;font-weight:600}
+.btn.purple{background:var(--purple);color:#fff;border-color:var(--purple);font-weight:600}
+.btn.orange{background:var(--warn);color:#0f172a;border-color:var(--warn);font-weight:600}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.file-label{display:inline-flex;align-items:center;gap:8px}
+.file-label{display:inline-flex;align-items:center;gap:8px;cursor:pointer;}
 input[type=file]{display:none}
 .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:18px}
 .card h2{font-size:15px;margin-bottom:12px;color:var(--accent);font-weight:600;display:flex;align-items:center;gap:8px}
@@ -88,6 +90,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .badge.lunas{background:#14532d;color:#86efac}
 .badge.sebagian{background:#78350f;color:#fcd34d}
 .badge.belum{background:#7f1d1d;color:#fca5a5}
+.badge.admin{background:#4c1d95;color:#ddd6fe}
 .muted{color:var(--muted)}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--panel2);border:1px solid var(--accent);padding:12px 18px;border-radius:9px;opacity:0;transform:translateY(20px);transition:.3s;z-index:99;max-width:420px;line-height:1.4}
 .toast.show{opacity:1;transform:translateY(0)}
@@ -126,8 +129,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .pagination button:hover:not(:disabled){background:#334155;border-color:var(--accent)}
 .diag-box{background:#1e293b;border:1px solid #f59e0b;border-radius:8px;padding:15px;margin-bottom:18px;display:none}
 .diag-box.show{display:block}
+
 /* Login Overlay Style */
-#loginOverlay{position:fixed;inset:0;background:rgba(15,23,42,0.9);display:flex;align-items:center;justify-content:center;z-index:9999;}
+#loginOverlay{position:fixed;inset:0;background:rgba(15,23,42,0.95);display:flex;align-items:center;justify-content:center;z-index:9999;}
 .login-card{background:var(--panel);border:1px solid var(--border);padding:30px;border-radius:12px;width:340px;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,0.5);}
 .login-card h2{color:var(--accent);margin-bottom:20px;}
 .login-card input{width:100%;padding:10px;margin-bottom:15px;background:var(--bg);border:1px solid var(--border);color:white;border-radius:6px;outline:none;}
@@ -140,7 +144,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 <!-- LOGIN OVERLAY -->
 <div id="loginOverlay">
   <div class="login-card">
-    <h2>🔒 Login Admin</h2>
+    <h2>🔒 Login Firebase</h2>
     <input type="email" id="loginEmail" placeholder="Email" value="admin@piutang.local">
     <input type="password" id="loginPassword" placeholder="Password" value="admin1">
     <button class="btn primary" id="btnLogin" style="width:100%;padding:12px;">Masuk</button>
@@ -164,20 +168,20 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
   <div class="container">
     <div class="toolbar">
-      <label class="btn primary file-label" data-requires="edit">
-        📥 Import Penjualan (Timpa)
+      <label class="btn primary file-label">
+        📥 Import Penjualan
         <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
       </label>
-      <label class="btn file-label" style="border-color:#22c55e" data-requires="edit">
+      <label class="btn file-label" style="border-color:#22c55e">
         💳 Import Pembayaran
         <input type="file" id="payFileInput" accept=".xlsx,.xls,.csv">
       </label>
       <button class="btn" id="btnRefresh" style="border-color:#f59e0b;color:#f59e0b">🔄 Reload Data</button>
       <button class="btn green" id="btnExport">💾 Export Excel</button>
+      <button class="btn danger" id="btnReset">🗑️ Reset Database</button>
       <span class="muted" id="statusText">Siap</span>
     </div>
 
-    <!-- ... (SISA HTML: diagBox, tabs, slicer, pane-dashboard, pane-piutang, pane-kas, pane-grouping, pane-aging TETAP SAMA PERSIS SEPERTI ASLINYA) ... -->
     <div class="diag-box" id="diagBox">
       <h3 style="color:#f59e0b;margin-bottom:10px;font-size:14px">🔍 Laporan Import Excel</h3>
       <div id="diagContent" style="font-size:12px;line-height:1.6"></div>
@@ -210,17 +214,18 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       </div>
     </div>
 
-    <!-- PANES (Sama seperti aslinya) -->
+    <!-- PANES (Sama seperti sebelumnya) -->
     <div class="pane active" id="pane-dashboard">
       <div class="card">
         <h2>📈 Ringkasan &amp; Rekonsiliasi</h2>
         <div class="kpis" id="kpiBox">
           <div class="kpi"><div class="label">Penjualan Net (Semua)</div><div class="value" id="kpiTotalAll">Rp 0</div></div>
-          <div class="kpi"><div class="label">Total Piutang (Semua)</div><div class="value warn" id="kpiPiutangAll">Rp 0</div></div>
+          <div class="kpi"><div class="label">Sisa Piutang</div><div class="value warn" id="kpiPiutangAll">Rp 0</div></div>
           <div class="kpi"><div class="label">Selisih (Net - Bayar)</div><div class="value green" id="kpiSelisih">Rp 0</div></div>
           <div class="kpi"><div class="label">Jumlah Invoice</div><div class="value" id="kpiInv">0</div></div>
           <div class="kpi"><div class="label">Pelanggan Aktif</div><div class="value" id="kpiCust">0</div></div>
         </div>
+        <div id="rekonInfo" class="muted" style="margin-top:10px"></div>
       </div>
       <div class="grid2">
         <div class="card"><h2>🏆 Top 30 Pelanggan</h2><div class="scroll"><table id="tblTopCust"><thead><tr><th>#</th><th>Pelanggan</th><th class="num">Penjualan</th></tr></thead><tbody></tbody></table></div></div>
@@ -252,7 +257,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
         <div class="pagination" id="pagLedger"><span id="pagLedgerInfo">Menampilkan 0-0 dari 0</span><div class="controls"><button id="pagLedgerPrev" disabled>‹ Prev</button><button id="pagLedgerNext" disabled>Next ›</button></div></div>
       </div>
 
-      <div class="card" data-requires="edit">
+      <div class="card">
         <h2>➕ Input Pembayaran Manual</h2>
         <div class="form-grid">
           <div class="search-wrap" style="grid-column:span 2">
@@ -283,15 +288,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
     <div class="pane" id="pane-kas">
       <div class="card"><h2>💵 Posisi Kas Tunai</h2><div class="kpis"><div class="kpi"><div class="label">Total Tunai Diterima</div><div class="value" id="kasIn">Rp 0</div></div><div class="kpi"><div class="label">Disetor ke Bank</div><div class="value green" id="kasOut">Rp 0</div></div><div class="kpi"><div class="label">Saldo Tunai</div><div class="value warn" id="kasSaldo">Rp 0</div></div></div></div>
-      <div class="card" data-requires="edit">
-        <h2>🏦 Catat Setoran</h2>
-        <div class="form-grid">
-          <div><label>Tanggal Setor</label><input type="text" id="setDateDisplay" placeholder="dd/mm/yyyy" autocomplete="off"></div>
-          <div><label>Jumlah Setor</label><input type="number" id="setAmount" min="1" step="1"></div>
-          <div><label>Bank</label><input type="text" id="setBank"></div>
-          <div><button type="button" class="btn green" id="btnAddSetor" style="width:100%">Simpan Setoran</button></div>
-        </div>
-      </div>
+      <div class="card"><h2>🏦 Catat Setoran</h2><div class="form-grid"><div><label>Tanggal Setor</label><input type="text" id="setDateDisplay" placeholder="dd/mm/yyyy" autocomplete="off"></div><div><label>Jumlah Setor</label><input type="number" id="setAmount" min="1" step="1"></div><div><label>Bank</label><input type="text" id="setBank"></div><div><button type="button" class="btn green" id="btnAddSetor" style="width:100%">Simpan Setoran</button></div></div></div>
     </div>
 
     <div class="pane" id="pane-grouping">
@@ -324,7 +321,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 
 <script>
 /* ============================================================
-   LOGIKA APLIKASI & FIREBASE INTEGRATION
+   LOGIKA APLIKASI FIREBASE
 ============================================================ */
 const state = {
   clean: [], payments: [], setoran: [], piutang: [], invMap: new Map(),
@@ -342,9 +339,8 @@ const fmtRp = n => 'Rp ' + (Math.round(n||0)).toLocaleString('id-ID');
 const fmtNum = n => (n||0).toLocaleString('id-ID');
 const dateKey = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
 
-function formatDateDisplay(d) { if (!d) return ''; const day = String(d.getDate()).padStart(2, '0'); const month = String(d.getMonth() + 1).padStart(2, '0'); return `${day}/${month}/${d.getFullYear()}`; }
+function formatDateDisplay(d) { if (!d) return ''; return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; }
 function parseDateInput(val) { if (!val) return null; const p = val.split('/'); if (p.length === 3) { const d = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1, y = parseInt(p[2], 10); if (!isNaN(d) && !isNaN(m) && !isNaN(y)) { const dt = new Date(y, m, d); if (dt.getDate() === d && dt.getMonth() === m) return dt; } } return null; }
-
 function toNum(v){
   if(v===null||v===undefined||v==='') return 0; if(typeof v==='number') return isFinite(v)?v:0;
   let s = String(v).trim(); if(!s || s.startsWith('=')) return 0;
@@ -355,7 +351,6 @@ function toNum(v){
   else if (hasComma) { const parts = s.split(','); if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) s = s.replace(/,/g, ''); else s = s.replace(/,/g, '.'); }
   const n = Number(s); return isNaN(n) ? 0 : (neg ? -n : n);
 }
-
 function parseDate(v){
   if(!v) return null; if(v instanceof Date) return isNaN(v)?null:v;
   if(typeof v==='number'){ const d = XLSX.SSF.parse_date_code(v); return d?new Date(d.y,d.m-1,d.d):null; }
@@ -364,11 +359,10 @@ function parseDate(v){
   if(m){ let y = m[3].length===2?(Number(m[3])<50?2000+Number(m[3]):1900+Number(m[3])):Number(m[3]); return new Date(y,Number(m[2])-1,Number(m[1])); }
   const d = new Date(s); return isNaN(d)?null:d;
 }
-
-function toast(msg, ms=2400){ const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._tm); t._tm = setTimeout(()=>t.classList.remove('show'), ms); }
+function toast(msg, ms=3000){ const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._tm); t._tm = setTimeout(()=>t.classList.remove('show'), ms); }
 
 /* ============================================================
-   AUTHENTICATION LOGIC
+   AUTENTIKASI FIREBASE
 ============================================================ */
 document.getElementById('btnLogin').onclick = async () => {
   const email = document.getElementById('loginEmail').value;
@@ -392,38 +386,31 @@ window.fb.onAuthStateChanged(window.fb.auth, (user) => {
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('mainApp').style.display = 'block';
     document.getElementById('userEmailDisplay').textContent = user.email;
-    loadFromFirestore(); // Ambil data saat login
+    loadFromFirestore();
   } else {
     document.getElementById('loginOverlay').style.display = 'flex';
     document.getElementById('mainApp').style.display = 'none';
     document.getElementById('btnLogin').disabled = false;
     document.getElementById('btnLogin').textContent = 'Masuk';
-    // Bersihkan state
     state.clean = []; state.payments = []; state.setoran = []; state.piutang = []; state.invMap = new Map();
     renderAll();
   }
 });
 
 /* ============================================================
-   FIRESTORE: FETCH DATA (Hemat Kuota)
+   FIRESTORE: LOAD DATA
 ============================================================ */
 async function loadFromFirestore() {
   document.getElementById('statusText').textContent = 'Memuat data dari Firestore...';
   try {
-    // 1. Ambil Penjualan (Limit 5000 agar kuota aman)
     const qSales = window.fb.query(window.fb.collection(window.fb.db, 'penjualan'), window.fb.orderBy('date', 'desc'), window.fb.limit(5000));
     const snapSales = await window.fb.getDocs(qSales);
-    
     state.clean = [];
     snapSales.forEach(doc => {
       const d = doc.data();
-      state.clean.push({
-        _docId: doc.id, inv: d.inv, custName: d.custName, sales: d.sales,
-        date: d.date ? d.date.toDate() : null, item: d.item, jumlah: d.jumlah, diskon: d.diskon
-      });
+      state.clean.push({ _docId: doc.id, inv: d.inv, custName: d.custName, sales: d.sales, date: d.date ? d.date.toDate() : null, item: d.item, jumlah: d.jumlah, diskon: d.diskon });
     });
 
-    // 2. Ambil Pembayaran
     const snapPays = await window.fb.getDocs(window.fb.collection(window.fb.db, 'pembayaran'));
     state.payments = [];
     snapPays.forEach(doc => {
@@ -431,7 +418,6 @@ async function loadFromFirestore() {
       state.payments.push({ _docId: doc.id, inv: d.inv, amount: d.amount, date: d.date ? d.date.toDate() : null, method: d.method });
     });
 
-    // 3. Ambil Setoran
     const snapSetor = await window.fb.getDocs(window.fb.collection(window.fb.db, 'setoran'));
     state.setoran = [];
     snapSetor.forEach(doc => {
@@ -444,18 +430,16 @@ async function loadFromFirestore() {
     renderAll();
     
     document.getElementById('statusText').textContent = `Data dimuat: ${fmtNum(state.clean.length)} baris penjualan`;
-    toast('✅ Data berhasil dimuat dari Firestore');
+    toast('✅ Data berhasil dimuat');
   } catch (e) {
-    console.error(e);
-    toast('❌ Gagal memuat data: ' + e.message, 5000);
+    console.error(e); toast('❌ Gagal memuat data: ' + e.message, 5000);
     document.getElementById('statusText').textContent = 'Gagal memuat data';
   }
 }
-
 document.getElementById('btnRefresh').onclick = loadFromFirestore;
 
 /* ============================================================
-   FUNGSI STATE LOKAL (Sama seperti aslinya)
+   STATE CALCULATIONS
 ============================================================ */
 function rebuildInvMap(){
   const map = new Map();
@@ -466,7 +450,6 @@ function rebuildInvMap(){
   }
   state.invMap = map;
 }
-
 function hitungPiutang(){
   const paid = new Map();
   for(const p of state.payments) paid.set(p.inv, (paid.get(p.inv)||0) + p.amount);
@@ -483,30 +466,63 @@ function hitungPiutang(){
   state.piutang = list;
 }
 
-/* ... (Fungsi Slicer, Rendering, Paginasi, Ledger, Export TETAP SAMA SEPERTI ASLINYA) ... */
-// (Saya menyingkat kode state/render di sini karena sama persis dengan kode V4 Anda. 
-// Anda cukup menyalin ulang fungsi render, slicer, dll dari kode V4 Anda ke sini.
-// CUKUP PASTIKAN FUNGSI saveLocal() DIHAPUS dan setiap aksi simpan diubah menjadi Firestore)
-
 const SL = {tahun:'', bulan:'', sales:'', cust:''};
-function refreshSlicerOptions(){ /* SAMA */ }
-function applySlicers(){ /* SAMA */ }
-function updateSlicerInfo(){ /* SAMA */ }
-function datePass(d){ /* SAMA */ }
-function entityPass(sales, cust){ /* SAMA */ }
-function getView(){ /* SAMA */ }
-function renderAll(){ /* SAMA */ }
-function renderDashboard(V){ /* SAMA */ }
-function renderPiutang(V){ /* SAMA */ }
-function renderGrouping(V){ /* SAMA */ }
-function renderAging(V){ /* SAMA */ }
-function renderKas(){ /* SAMA */ }
-function renderPagination(containerId, infoId, prevId, nextId, totalItems, currentPage, pageSize, onPageChange) { /* SAMA */ }
-function generateLedgerData(start, end, targetInv) { /* SAMA */ }
-function renderLedger() { /* SAMA */ }
-// (Copy paste fungsi-fungsi di atas dari kode V4 Anda)
+function refreshSlicerOptions(){
+  const years = new Set(), sales = new Set(), custs = new Set();
+  for(const r of state.clean){
+    const y = r.date ? r.date.getFullYear() : '';
+    if(y) years.add(y);
+    if(r.sales) sales.add(r.sales);
+    if(r.custName) custs.add(r.custName);
+  }
+  const selY = document.getElementById('slTahun');
+  const cur = SL.tahun;
+  selY.innerHTML = '<option value="">Semua Tahun</option>' + [...years].sort((a,b)=>a-b).map(y=>`<option value="${y}">${y}</option>`).join('');
+  selY.value = [...years].map(String).includes(cur) ? cur : ''; SL.tahun = selY.value;
+  const opt = s => `<option value="${String(s).replace(/"/g,'&quot;')}"></option>`;
+  document.getElementById('dlSales').innerHTML = [...sales].sort().map(opt).join('');
+  document.getElementById('dlCust').innerHTML = [...custs].sort().map(opt).join('');
+}
+function applySlicers(){
+  SL.tahun = document.getElementById('slTahun').value;
+  SL.bulan = document.getElementById('slBulan').value;
+  SL.sales = document.getElementById('slSales').value.trim();
+  SL.cust = document.getElementById('slCust').value.trim();
+  Object.keys(state.pag).forEach(k => state.pag[k].page = 1);
+  renderAll();
+}
+function updateSlicerInfo(){
+  const el = document.getElementById('slInfo'); if(!el) return;
+  const act = [];
+  if(SL.tahun) act.push('Tahun '+SL.tahun); if(SL.bulan) act.push('Bulan '+SL.bulan);
+  if(SL.sales) act.push('Sales: '+SL.sales); if(SL.cust) act.push('Pelanggan: '+SL.cust);
+  ['slTahun','slBulan','slSales','slCust'].forEach((id,i)=>{
+    const key = ['tahun','bulan','sales','cust'][i];
+    document.getElementById(id).classList.toggle('on', !!SL[key]);
+  });
+  if(!act.length){ el.textContent = state.clean.length ? `Tanpa filter · ${fmtNum(state.clean.length)} baris` : 'Tanpa filter'; return; }
+  const V = getView(); el.textContent = `Filter aktif: ${act.join(' · ')} → ${fmtNum(V.clean.length)} dari ${fmtNum(state.clean.length)} baris`;
+}
+function datePass(d){
+  if(!SL.tahun && !SL.bulan) return true;
+  let y, m; if(d){ y = d.getFullYear(); m = d.getMonth()+1; }
+  if(SL.tahun && y !== Number(SL.tahun)) return false;
+  if(SL.bulan && m !== Number(SL.bulan)) return false;
+  return true;
+}
+function entityPass(sales, cust){
+  if(SL.sales && !String(sales||'').toUpperCase().includes(SL.sales.toUpperCase())) return false;
+  if(SL.cust && !String(cust||'').toUpperCase().includes(SL.cust.toUpperCase())) return false;
+  return true;
+}
+function getView(){
+  const clean = state.clean.filter(r => datePass(r.date) && entityPass(r.sales, r.custName));
+  const piutang = state.piutang.filter(p => datePass(p.date) && entityPass(p.sales, p.custName));
+  const invSet = new Set(piutang.map(p => p.inv));
+  const paysByInv = state.payments.filter(p => invSet.has(p.inv));
+  return {clean, piutang, paysByInv};
+}
 
-// --- EVENT LISTENER FILTER SLICER ---
 ['slTahun','slBulan'].forEach(id => document.getElementById(id).addEventListener('change', applySlicers));
 let _slT = null;
 ['slSales','slCust'].forEach(id => {
@@ -517,196 +533,277 @@ let _slT = null;
 document.getElementById('btnSlReset').onclick = () => { ['slTahun','slBulan','slSales','slCust'].forEach(id => document.getElementById(id).value = ''); applySlicers(); };
 
 /* ============================================================
-   FIRESTORE: IMPORT PENJUALAN (BATCH WRITE & DELETE)
+   RENDER FUNCTIONS
 ============================================================ */
-const COL_ALIASES = { /* SAMA */ inv: ['INV','INVOICE','NO INVOICE','NO_INVOICE','NO. INVOICE','NO INV','INV NO','INVOICE NO'], date: ['INV DATE','TANGGAL','TGL','DATE','TANGGAL INVOICE','TGL INVOICE','INVOICE DATE'], custName: ['CUST NAME','NAMA PELANGGAN','CUSTOMER NAME','PELANGGAN','NAMA CUST','NAMA CUSTOMER'], sales: ['SALES','SALESMAN','NAMA SALES','SALES NAME','NAMA SALESMAN'], item: ['ITEM','PRODUK','PRODUCT','NAMA PRODUK','NAMA ITEM','DESKRIPSI','DESCRIPTION'], jumlah: ['JUMLAH','TOTAL','NILAI','AMOUNT','JUMLAH RP','SUBTOTAL','GROSS','NET','NILAI RP','TOTAL RP','TOTAL BAYAR'] };
-function pickRaw(r, aliases){ /* SAMA */ }
-const pickStr = (r, alias) => { const v = pickRaw(r, alias); return v==null ? '' : String(v).trim(); };
-const pickNum = (r, alias) => toNum(pickRaw(r, alias));
-function processRawToClean(rawRows){ /* SAMA */ }
+function renderAll() { updateSlicerInfo(); const V = getView(); renderDashboard(V); renderPiutang(V); renderGrouping(V); renderAging(V); renderKas(); renderLedger(); }
+function renderDashboard(V) {
+  const totalAll = V.clean.reduce((s,r)=>s+r.jumlah,0);
+  const piutangAll = V.piutang.reduce((s,p)=>s+p.sisa,0); // PERBAIKAN: p.sisa, bukan p.total
+  const payTotalAll = V.paysByInv.reduce((s,p)=>s+p.amount,0);
+  const invSet = new Set(V.clean.map(r=>r.inv)); const custSet = new Set(V.clean.map(r=>r.custName));
+  document.getElementById('kpiTotalAll').textContent = fmtRp(totalAll);
+  document.getElementById('kpiPiutangAll').textContent = fmtRp(piutangAll);
+  document.getElementById('kpiSelisih').textContent = fmtRp(totalAll - payTotalAll);
+  document.getElementById('kpiInv').textContent = fmtNum(invSet.size);
+  document.getElementById('kpiCust').textContent = fmtNum(custSet.size);
+  document.getElementById('rekonInfo').innerHTML = `ℹ️ Informasi: Penjualan Net ${fmtRp(totalAll)} &minus; Pembayaran ${fmtRp(payTotalAll)} = Selisih ${fmtRp(totalAll - payTotalAll)}.`;
+  
+  const byCust = new Map(); V.clean.forEach(r => byCust.set(r.custName, (byCust.get(r.custName)||0)+r.jumlah));
+  document.querySelector('#tblTopCust tbody').innerHTML = [...byCust.entries()].sort((a,b)=>b[1]-a[1]).slice(0,30).map(([n,v],i)=>`<tr><td>${i+1}</td><td>${n}</td><td class="num">${fmtRp(v)}</td></tr>`).join('') || '<tr><td colspan="3" class="empty">Kosong</td></tr>';
+  const byProd = new Map(); V.clean.forEach(r => byProd.set(r.item, (byProd.get(r.item)||0)+r.jumlah));
+  document.querySelector('#tblTopProd tbody').innerHTML = [...byProd.entries()].sort((a,b)=>b[1]-a[1]).slice(0,30).map(([n,v],i)=>`<tr><td>${i+1}</td><td>${n}</td><td class="num">${fmtRp(v)}</td></tr>`).join('') || '<tr><td colspan="3" class="empty">Kosong</td></tr>';
+}
+function renderPiutang(V) {
+  const pagePiutang = state.pag.piutang; const startPiutang = (pagePiutang.page - 1) * pagePiutang.pageSize; const endPiutang = Math.min(startPiutang + pagePiutang.pageSize, V.piutang.length); const itemsPiutang = V.piutang.slice(startPiutang, endPiutang);
+  document.querySelector('#tblPiutang tbody').innerHTML = itemsPiutang.map(p=>`<tr><td>${p.inv}</td><td>${p.date ? formatDateDisplay(p.date) : '-'}</td><td>${p.custName}</td><td class="num">${fmtRp(p.total)}</td><td class="num">${fmtRp(p.dibayar)}</td><td class="num"><b>${fmtRp(p.sisa)}</b></td><td><span class="badge ${p.status.toLowerCase()}">${p.status}</span></td><td><button class="btn danger" data-delinv="${p.inv}" style="padding:3px 8px;font-size:11px">🗑️</button></td></tr>`).join('') || '<tr><td colspan="8" class="empty">Kosong</td></tr>';
+  renderPagination('pagPiutang', 'pagPiutangInfo', 'pagPiutangPrev', 'pagPiutangNext', V.piutang.length, pagePiutang.page, pagePiutang.pageSize, (newPage) => { state.pag.piutang.page = newPage; renderPiutang(getView()); });
 
-// Helper untuk menghapus seluruh koleksi via Batch (Maks 500 per commit)
+  const allPays = V.paysByInv.slice().sort((a,b)=>b.date-a.date); const pagePay = state.pag.pay; const startPay = (pagePay.page - 1) * pagePay.pageSize; const endPay = Math.min(startPay + pagePay.pageSize, allPays.length); const itemsPay = allPays.slice(startPay, endPay);
+  document.querySelector('#tblPay tbody').innerHTML = itemsPay.map((p,i)=>`<tr><td>${startPay + i + 1}</td><td>${p.inv}</td><td>${formatDateDisplay(p.date)}</td><td class="num">${fmtRp(p.amount)}</td><td>${p.method}</td><td><button class="btn danger" data-delpay="${p._docId}" style="padding:3px 8px;font-size:11px">🗑️</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Kosong</td></tr>';
+  renderPagination('pagPay', 'pagPayInfo', 'pagPayPrev', 'pagPayNext', allPays.length, pagePay.page, pagePay.pageSize, (newPage) => { state.pag.pay.page = newPage; renderPiutang(getView()); });
+}
+function renderGrouping(V) {
+  const byCustOut = new Map(); V.piutang.forEach(p => { let c = byCustOut.get(p.custName); if(!c) { c = { total: 0, dibayar: 0, sisa: 0 }; byCustOut.set(p.custName, c); } c.total += p.total; c.dibayar += p.dibayar; c.sisa += p.sisa; });
+  const outCustArr = [...byCustOut.entries()].filter(([_,c]) => c.sisa > 0.5).sort((a,b)=>b[1].sisa - a[1].sisa);
+  const pageOutCust = state.pag.groupOutCust; const startOutCust = (pageOutCust.page - 1) * pageOutCust.pageSize; const endOutCust = Math.min(startOutCust + pageOutCust.pageSize, outCustArr.length); const itemsOutCust = outCustArr.slice(startOutCust, endOutCust);
+  document.querySelector('#tblGroupOutstandingCust tbody').innerHTML = itemsOutCust.map(([name, c])=>`<tr><td>${name}</td><td class="num">${fmtRp(c.total)}</td><td class="num">${fmtRp(c.dibayar)}</td><td class="num"><b>${fmtRp(c.sisa)}</b></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Kosong</td></tr>';
+  renderPagination('pagGroupOutstandingCust', 'pagGroupOutstandingCustInfo', 'pagGroupOutstandingCustPrev', 'pagGroupOutstandingCustNext', outCustArr.length, pageOutCust.page, pageOutCust.pageSize, (newPage) => { state.pag.groupOutCust.page = newPage; renderGrouping(getView()); });
+
+  const bySalesOmzet = new Map(); V.clean.forEach(r => bySalesOmzet.set(r.sales, (bySalesOmzet.get(r.sales)||0)+r.jumlah));
+  const salesOmzetArr = [...bySalesOmzet.entries()].sort((a,b)=>b[1]-a[1]);
+  const pageSalesOmzet = state.pag.groupSalesOmzet; const startSalesOmzet = (pageSalesOmzet.page - 1) * pageSalesOmzet.pageSize; const endSalesOmzet = Math.min(startSalesOmzet + pageSalesOmzet.pageSize, salesOmzetArr.length); const itemsSalesOmzet = salesOmzetArr.slice(startSalesOmzet, endSalesOmzet);
+  document.querySelector('#tblGroupSalesOmzet tbody').innerHTML = itemsSalesOmzet.map(([name, val])=>`<tr><td>${name}</td><td class="num">${fmtRp(val)}</td></tr>`).join('') || '<tr><td colspan="2" class="empty">Kosong</td></tr>';
+  renderPagination('pagGroupSalesOmzet', 'pagGroupSalesOmzetInfo', 'pagGroupSalesOmzetPrev', 'pagGroupSalesOmzetNext', salesOmzetArr.length, pageSalesOmzet.page, pageSalesOmzet.pageSize, (newPage) => { state.pag.groupSalesOmzet.page = newPage; renderGrouping(getView()); });
+
+  const bySalesOut = new Map(); V.piutang.forEach(p => bySalesOut.set(p.sales, (bySalesOut.get(p.sales)||0)+p.sisa));
+  const salesOutArr = [...bySalesOut.entries()].filter(([_,sisa]) => sisa > 0.5).sort((a,b)=>b[1]-a[1]);
+  const pageSalesOut = state.pag.groupSalesOut; const startSalesOut = (pageSalesOut.page - 1) * pageSalesOut.pageSize; const endSalesOut = Math.min(startSalesOut + pageSalesOut.pageSize, salesOutArr.length); const itemsSalesOut = salesOutArr.slice(startSalesOut, endSalesOut);
+  document.querySelector('#tblGroupSalesOutstanding tbody').innerHTML = itemsSalesOut.map(([name, sisa])=>`<tr><td>${name}</td><td class="num">${fmtRp(sisa)}</td></tr>`).join('') || '<tr><td colspan="2" class="empty">Kosong</td></tr>';
+  renderPagination('pagGroupSalesOutstanding', 'pagGroupSalesOutstandingInfo', 'pagGroupSalesOutstandingPrev', 'pagGroupSalesOutstandingNext', salesOutArr.length, pageSalesOut.page, pageSalesOut.pageSize, (newPage) => { state.pag.groupSalesOut.page = newPage; renderGrouping(getView()); });
+}
+function renderAging(V) {
+  const rows = V.piutang.filter(p=>p.sisa>0.5); let sNeg=0,s0=0,s1=0,s2=0,s3=0;
+  rows.forEach(r=>{ if(r.umur<=0) sNeg+=r.sisa; else if(r.umur<=30) s0+=r.sisa; else if(r.umur<=60) s1+=r.sisa; else if(r.umur<=90) s2+=r.sisa; else s3+=r.sisa; });
+  document.getElementById('agNeg').textContent = fmtRp(sNeg); document.getElementById('ag0').textContent = fmtRp(s0); document.getElementById('ag1').textContent = fmtRp(s1); document.getElementById('ag2').textContent = fmtRp(s2); document.getElementById('ag3').textContent = fmtRp(s3); document.getElementById('agTot').textContent = fmtRp(sNeg+s0+s1+s2+s3);
+  const pageAging = state.pag.aging; const startAging = (pageAging.page - 1) * pageAging.pageSize; const endAging = Math.min(startAging + pageAging.pageSize, rows.length); const itemsAging = rows.slice(startAging, endAging);
+  document.querySelector('#tblAging tbody').innerHTML = itemsAging.map(r=>`<tr><td>${r.inv}</td><td>${r.custName}</td><td>${r.date ? formatDateDisplay(r.date) : '-'}</td><td>${r.allowanceDate ? formatDateDisplay(r.allowanceDate) : '-'}</td><td class="num">${fmtRp(r.sisa)}</td><td class="num">${r.umur} hari</td><td>${r.umur<=0?'Allowance':r.umur<=30?'1-30':r.umur<=60?'31-60':r.umur<=90?'61-90':'>90'}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Kosong</td></tr>';
+  renderPagination('pagAging', 'pagAgingInfo', 'pagAgingPrev', 'pagAgingNext', rows.length, pageAging.page, pageAging.pageSize, (newPage) => { state.pag.aging.page = newPage; renderAging(getView()); });
+}
+function renderKas() {
+  const tunai = state.payments.filter(p => String(p.method||'').toLowerCase()==='tunai'); const masuk = tunai.reduce((a,p)=>a+p.amount,0); const keluar = state.setoran.reduce((a,x)=>a+x.amount,0);
+  document.getElementById('kasIn').textContent = fmtRp(masuk); document.getElementById('kasOut').textContent = fmtRp(keluar); document.getElementById('kasSaldo').textContent = fmtRp(masuk-keluar);
+}
+function renderPagination(containerId, infoId, prevId, nextId, totalItems, currentPage, pageSize, onPageChange) {
+  const start = (currentPage - 1) * pageSize; const end = Math.min(start + pageSize, totalItems);
+  document.getElementById(infoId).textContent = `Menampilkan ${totalItems > 0 ? start + 1 : 0}-${end} dari ${totalItems} data`;
+  document.getElementById(prevId).disabled = currentPage <= 1; document.getElementById(nextId).disabled = end >= totalItems;
+  document.getElementById(prevId).onclick = () => { if(currentPage > 1) onPageChange(currentPage - 1); };
+  document.getElementById(nextId).onclick = () => { if(end < totalItems) onPageChange(currentPage + 1); };
+}
+
+/* ============================================================
+   BUKU BESAR & LEDGER
+============================================================ */
+function generateLedgerData(start, end, targetInv) {
+  const allTrans = []; const invTotals = new Map();
+  state.clean.forEach(r => { if (!invTotals.has(r.inv)) invTotals.set(r.inv, { date: r.date, inv: r.inv, cust: r.custName, total: 0 }); const entry = invTotals.get(r.inv); entry.total += r.jumlah; });
+  invTotals.forEach(entry => { if (entry.date && entry.date >= start && entry.date <= end) { if (targetInv && entry.inv !== targetInv) return; allTrans.push({ date: entry.date, inv: entry.inv, cust: entry.cust, desc: 'Penjualan', debet: entry.total, kredit: 0 }); } });
+  state.payments.forEach(p => { if (targetInv && p.inv !== targetInv) return; const invData = state.invMap.get(p.inv); if (invData && p.date && p.date >= start && p.date <= end) allTrans.push({ date: p.date, inv: p.inv, cust: invData.custName, desc: 'Pembayaran (' + (p.method || 'Transfer') + ')', debet: 0, kredit: p.amount }); });
+  allTrans.sort((a, b) => a.date - b.date); let saldo = 0;
+  return allTrans.map(t => { saldo += (t.debet - t.kredit); return { ...t, saldo }; });
+}
+function renderLedger() {
+  const startStr = document.getElementById('ledgerStartDate').value; const endStr = document.getElementById('ledgerEndDate').value;
+  if (!startStr || !endStr) { document.querySelector('#tblLedger tbody').innerHTML = '<tr><td colspan="7" class="empty">Tentukan periode tanggal terlebih dahulu</td></tr>'; renderPagination('pagLedger', 'pagLedgerInfo', 'pagLedgerPrev', 'pagLedgerNext', 0, 1, 50, () => {}); return; }
+  const start = parseDateInput(startStr); const end = parseDateInput(endStr); if (!start || !end) { toast('❌ Format tanggal salah.'); return; } end.setHours(23, 59, 59, 999);
+  const data = generateLedgerData(start, end, state.ledgerSelectedInv); state.ledgerData = data;
+  const pageLedger = state.pag.ledger; const startIdx = (pageLedger.page - 1) * pageLedger.pageSize; const endIdx = Math.min(startIdx + pageLedger.pageSize, data.length); const items = data.slice(startIdx, endIdx);
+  document.querySelector('#tblLedger tbody').innerHTML = items.map(t => `<tr><td>${formatDateDisplay(t.date)}</td><td>${t.inv}</td><td>${t.cust}</td><td>${t.desc}</td><td class="num">${t.debet > 0 ? fmtRp(t.debet) : '-'}</td><td class="num">${t.kredit > 0 ? fmtRp(t.kredit) : '-'}</td><td class="num"><b>${fmtRp(t.saldo)}</b></td></tr>`).join('') || '<tr><td colspan="7" class="empty">Tidak ada transaksi</td></tr>';
+  renderPagination('pagLedger', 'pagLedgerInfo', 'pagLedgerPrev', 'pagLedgerNext', data.length, pageLedger.page, pageLedger.pageSize, (newPage) => { state.pag.ledger.page = newPage; renderLedger(); });
+}
+document.getElementById('btnLoadLedger').onclick = () => { state.pag.ledger.page = 1; renderLedger(); };
+document.getElementById('btnExportLedger').onclick = () => {
+  if (!state.ledgerData.length) { toast('⚠️ Tidak ada data.'); return; }
+  const ws = XLSX.utils.json_to_sheet(state.ledgerData.map(t => ({ 'Tanggal': formatDateDisplay(t.date), 'Invoice': t.inv, 'Pelanggan': t.cust, 'Keterangan': t.desc, 'Debet': t.debet, 'Kredit': t.kredit, 'Saldo': t.saldo })));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Buku Besar'); XLSX.writeFile(wb, `BukuBesar_${dateKey(new Date())}.xlsx`);
+};
+
+/* ============================================================
+   SEARCH & INTERACTIONS
+============================================================ */
+// Ledger Search
+const ledgerInvSearch = document.getElementById('ledgerInvSearch'); const ledgerInvResults = document.getElementById('ledgerInvResults'); let ledgerSearchTimer = null;
+function renderLedgerResults(results) {
+  if (!results.length) { ledgerInvResults.classList.remove('show'); return; }
+  ledgerInvResults.innerHTML = results.map((p, i) => `<div class="search-item" data-inv="${p.inv}"><div><div class="inv">${p.inv}</div><div class="cust">${p.custName}</div></div><div class="sisa">Sisa: ${fmtRp(p.sisa)}</div></div>`).join('');
+  ledgerInvResults.classList.add('show');
+}
+function selectLedgerInvoice(inv) { state.ledgerSelectedInv = inv; ledgerInvSearch.value = inv; ledgerInvResults.classList.remove('show'); document.getElementById('btnLoadLedger').click(); }
+ledgerInvSearch.addEventListener('input', () => {
+  clearTimeout(ledgerSearchTimer);
+  ledgerSearchTimer = setTimeout(() => {
+    const q = ledgerInvSearch.value.trim().toUpperCase();
+    if (!q) { ledgerInvResults.classList.remove('show'); state.ledgerSelectedInv = null; document.getElementById('btnLoadLedger').click(); return; }
+    renderLedgerResults(state.piutang.filter(p => String(p.inv).toUpperCase().includes(q) || String(p.custName).toUpperCase().includes(q)).slice(0, 15));
+  }, 150);
+});
+ledgerInvResults.addEventListener('click', (e) => { const item = e.target.closest('.search-item'); if (item) selectLedgerInvoice(item.dataset.inv); });
+document.addEventListener('click', (e) => { if (!e.target.closest('#ledgerInvSearch') && !e.target.closest('#ledgerInvResults')) ledgerInvResults.classList.remove('show'); });
+
+// Pay Search
+const paySearchInput = document.getElementById('payInvSearch'); const payResultsBox = document.getElementById('payInvResults'); const paySelectedInfo = document.getElementById('paySelectedInfo'); let paySearchTimer = null;
+function renderPayResults(results) {
+  if (!results.length) { payResultsBox.classList.remove('show'); return; }
+  payResultsBox.innerHTML = results.map((p, i) => `<div class="search-item" data-inv="${p.inv}"><div><div class="inv">${p.inv}</div><div class="cust">${p.custName}</div></div><div class="sisa">Sisa: ${fmtRp(p.sisa)}</div></div>`).join('');
+  payResultsBox.classList.add('show');
+}
+function selectPayInvoice(inv) {
+  state.paySelectedInv = inv; const p = state.piutang.find(x => x.inv === inv); if (!p) return;
+  paySearchInput.value = p.inv;
+  paySelectedInfo.innerHTML = `<span class="selected-chip">${p.inv} — ${p.custName} · Sisa: ${fmtRp(p.sisa)}<button type="button" id="clearPaySel">✕</button></span>`;
+  document.getElementById('clearPaySel').onclick = () => { state.paySelectedInv = null; paySearchInput.value = ''; paySelectedInfo.innerHTML = ''; };
+  payResultsBox.classList.remove('show');
+}
+paySearchInput.addEventListener('input', () => {
+  clearTimeout(paySearchTimer);
+  paySearchTimer = setTimeout(() => {
+    const q = paySearchInput.value.trim().toUpperCase();
+    if (!q) { payResultsBox.classList.remove('show'); return; }
+    renderPayResults(state.piutang.filter(p => p.sisa > 0.5).filter(p => String(p.inv).toUpperCase().includes(q) || String(p.custName).toUpperCase().includes(q)).slice(0, 15));
+  }, 150);
+});
+payResultsBox.addEventListener('click', (e) => { const item = e.target.closest('.search-item'); if (item) selectPayInvoice(item.dataset.inv); });
+document.addEventListener('click', (e) => { if (!e.target.closest('#payInvSearch') && !e.target.closest('#payInvResults')) payResultsBox.classList.remove('show'); });
+
+/* ============================================================
+   FIRESTORE ACTIONS (ADD / DELETE / IMPORT / RESET)
+============================================================ */
+document.getElementById('btnAddPay').onclick = async () => {
+  let inv = state.paySelectedInv; if (!inv) { const typed = paySearchInput.value.trim(); if (typed && state.invMap.has(typed)) inv = typed; }
+  const amount = toNum(document.getElementById('payAmount').value); const date = parseDateInput(document.getElementById('payDateDisplay').value);
+  if(!inv) { toast('❌ Pilih invoice terlebih dahulu'); return; } if(amount <= 0 || !date) { toast('Isi jumlah dan tanggal dengan benar'); return; }
+  try {
+    await window.fb.addDoc(window.fb.collection(window.fb.db, 'pembayaran'), { inv, amount, date, method: document.getElementById('payMethod').value });
+    toast('✅ Pembayaran disimpan ke Firestore');
+    document.getElementById('payAmount').value = ''; state.paySelectedInv = null; paySearchInput.value = ''; paySelectedInfo.innerHTML = '';
+    await loadFromFirestore();
+  } catch(e) { toast('❌ Gagal simpan: ' + e.message); }
+};
+document.getElementById('btnAddSetor').onclick = async () => {
+  const amount = toNum(document.getElementById('setAmount').value); const date = parseDateInput(document.getElementById('setDateDisplay').value);
+  if(amount <= 0 || !date) { toast('Isi data dengan benar'); return; }
+  try { await window.fb.addDoc(window.fb.collection(window.fb.db, 'setoran'), { date, amount, bank: document.getElementById('setBank').value }); toast('✅ Setoran disimpan'); document.getElementById('setAmount').value = ''; await loadFromFirestore(); } catch(e) { toast('❌ Gagal: ' + e.message); }
+};
+document.querySelector('#tblPiutang').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-delinv]'); if(!btn) return; if(!confirm('Hapus invoice ini beserta pembayarannya dari Database?')) return;
+  const inv = btn.dataset.delinv;
+  try {
+    const invDocs = state.clean.filter(r => r.inv === inv).map(r => r._docId); const payDocs = state.payments.filter(p => p.inv === inv).map(p => p._docId);
+    let batch = window.fb.writeBatch(window.fb.db); invDocs.forEach(id => batch.delete(window.fb.doc(window.fb.db, 'penjualan', id))); payDocs.forEach(id => batch.delete(window.fb.doc(window.fb.db, 'pembayaran', id)));
+    await batch.commit(); toast('🗑️ Invoice dihapus'); await loadFromFirestore();
+  } catch(e) { toast('❌ Gagal hapus: ' + e.message); }
+});
+document.querySelector('#tblPay').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-delpay]'); if(!btn) return; if(!confirm('Hapus pembayaran ini?')) return;
+  try { await window.fb.deleteDoc(window.fb.doc(window.fb.db, 'pembayaran', btn.dataset.delpay)); toast('🗑️ Pembayaran dihapus'); await loadFromFirestore(); } catch(e) { toast('❌ Gagal hapus: ' + e.message); }
+});
+
 async function clearCollection(colName) {
-  const snap = await window.fb.getDocs(window.fb.collection(window.fb.db, colName));
-  if (snap.empty) return;
-  let batch = window.fb.writeBatch(window.fb.db);
-  let count = 0;
-  for (const doc of snap.docs) {
-    batch.delete(doc.ref);
-    count++;
-    if (count === 500) { await batch.commit(); batch = window.fb.writeBatch(window.fb.db); count = 0; }
-  }
+  const snap = await window.fb.getDocs(window.fb.collection(window.fb.db, colName)); if (snap.empty) return;
+  let batch = window.fb.writeBatch(window.fb.db); let count = 0;
+  for (const doc of snap.docs) { batch.delete(doc.ref); count++; if (count === 500) { await batch.commit(); batch = window.fb.writeBatch(window.fb.db); count = 0; } }
   if (count > 0) await batch.commit();
 }
 
+document.getElementById('btnReset').onclick = async () => {
+  if(!confirm('⚠️ PERINGATAN ⚠️\n\nHapus SEMUA data di Database Firebase?\nTindakan ini tidak dapat dibatalkan.')) return;
+  const btn = document.getElementById('btnReset'); btn.textContent = 'Menghapus...'; btn.disabled = true;
+  try {
+    document.getElementById('statusText').textContent = 'Menghapus database...';
+    await clearCollection('penjualan'); await clearCollection('pembayaran'); await clearCollection('setoran');
+    toast('🗑️ Database berhasil dikosongkan');
+    await loadFromFirestore();
+    ['slTahun','slBulan','slSales','slCust'].forEach(id => document.getElementById(id).value = ''); applySlicers();
+  } catch (e) { toast('❌ Gagal menghapus: ' + e.message); }
+  finally { btn.textContent = '🗑️ Reset Database'; btn.disabled = false; }
+};
+
+const COL_ALIASES = { inv: ['INV','INVOICE','NO INVOICE','NO_INVOICE','NO. INVOICE','NO INV','INV NO','INVOICE NO'], date: ['INV DATE','TANGGAL','TGL','DATE','TANGGAL INVOICE','TGL INVOICE','INVOICE DATE'], custName: ['CUST NAME','NAMA PELANGGAN','CUSTOMER NAME','PELANGGAN','NAMA CUST','NAMA CUSTOMER'], sales: ['SALES','SALESMAN','NAMA SALES','SALES NAME','NAMA SALESMAN'], item: ['ITEM','PRODUK','PRODUCT','NAMA PRODUK','NAMA ITEM','DESKRIPSI','DESCRIPTION'], jumlah: ['JUMLAH','TOTAL','NILAI','AMOUNT','JUMLAH RP','SUBTOTAL','GROSS','NET','NILAI RP','TOTAL RP','TOTAL BAYAR'] };
+function pickRaw(r, aliases){ for(const k of aliases) if(r[k] !== undefined && r[k] !== null && r[k] !== '') return r[k]; const rk = Object.keys(r); for(const k of aliases){ const f = rk.find(x => x.trim().toUpperCase() === k.toUpperCase()); if(f && r[f] != null && r[f] !== '') return r[f]; } return null; }
+const pickStr = (r, alias) => { const v = pickRaw(r, alias); return v==null ? '' : String(v).trim(); };
+const pickNum = (r, alias) => toNum(pickRaw(r, alias));
+function processRawToClean(rawRows){
+  if(rawRows.length && Object.keys(rawRows[0]).some(k => k !== k.trim())) rawRows = rawRows.map(r => { const o = {}; for(const k in r) o[k.trim()] = r[k]; return o; });
+  const clean = []; const stats = { rawRows: rawRows.length, rawSum: 0, noInv: 0, zeroAmount: 0, kept: 0, keptSum: 0 };
+  for(const r of rawRows){
+    const inv = pickStr(r, COL_ALIASES.inv); const sales = pickStr(r, COL_ALIASES.sales); const jumlah = pickNum(r, COL_ALIASES.jumlah); const d = parseDate(pickRaw(r, COL_ALIASES.date));
+    stats.rawSum += jumlah; if(!inv){ stats.noInv++; continue; } if(jumlah === 0){ stats.zeroAmount++; continue; }
+    clean.push({ inv, custName: pickStr(r, COL_ALIASES.custName) || 'Unknown', sales: sales || pickStr(r, COL_ALIASES.custName), date: d, item: pickStr(r, COL_ALIASES.item) || 'Produk', jumlah, diskon: 0 });
+    stats.kept++; stats.keptSum += jumlah;
+  }
+  return { clean, stats };
+}
 document.getElementById('fileInput').addEventListener('change', e => {
-  const f = e.target.files[0]; if(!f) return;
-  const reader = new FileReader();
+  const f = e.target.files[0]; if(!f) return; const reader = new FileReader();
   reader.onload = async ev => {
     try {
-      const wb = XLSX.read(ev.target.result, {cellDates:true});
-      const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:null, raw:true});
-      const result = processRawToClean(json);
-      if(!result.clean.length) { toast('❌ Tidak ada baris valid', 4000); return; }
-      
-      if(!confirm(`Akan mengunggah ${result.clean.length} baris ke Firestore.\n⚠️ DATA PENJUALAN LAMA DI DATABASE AKAN DIHAPUS! Lanjutkan?`)) return;
-
-      document.getElementById('statusText').textContent = 'Menghapus data lama di Firestore...';
-      await clearCollection('penjualan');
-      await clearCollection('pembayaran'); // Hapus pembayaran lama karena invoice baru
-      
-      document.getElementById('statusText').textContent = 'Mengunggah data baru (Batch Process)...';
-      
-      // Upload Data via Batch
-      let batch = window.fb.writeBatch(window.fb.db);
-      let count = 0;
+      const wb = XLSX.read(ev.target.result, {cellDates:true}); const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:null, raw:true});
+      const result = processRawToClean(json); if(!result.clean.length) { toast('❌ Tidak ada baris valid', 4000); return; }
+      if(!confirm(`Akan mengunggah ${result.clean.length} baris ke Firestore.\n⚠️ DATA PENJUALAN & PEMBAYARAN LAMA AKAN DIHAPUS! Lanjutkan?`)) return;
+      document.getElementById('statusText').textContent = 'Menghapus data lama...'; await clearCollection('penjualan'); await clearCollection('pembayaran');
+      document.getElementById('statusText').textContent = 'Mengunggah data baru...';
+      let batch = window.fb.writeBatch(window.fb.db); let count = 0;
       for (const row of result.clean) {
-        const docRef = window.fb.doc(window.fb.collection(window.fb.db, 'penjualan'));
-        batch.set(docRef, { inv: row.inv, custName: row.custName, sales: row.sales, date: row.date, item: row.item, jumlah: row.jumlah, diskon: row.diskon });
-        count++;
+        const docRef = window.fb.doc(window.fb.collection(window.fb.db, 'penjualan')); batch.set(docRef, row); count++;
         if (count === 500) { await batch.commit(); batch = window.fb.writeBatch(window.fb.db); count = 0; }
       }
       if (count > 0) await batch.commit();
-      
-      toast(`✅ Berhasil unggah ${result.clean.length} baris ke Firestore`, 4000);
-      await loadFromFirestore(); // Reload
-      
-    } catch(err) { console.error(err); toast('❌ Gagal: ' + err.message, 5000); }
+      toast(`✅ Berhasil unggah ${result.clean.length} baris ke Firestore`, 4000); await loadFromFirestore();
+    } catch(err) { toast('❌ Gagal: ' + err.message, 5000); }
   };
-  reader.readAsArrayBuffer(f);
-  e.target.value = '';
+  reader.readAsArrayBuffer(f); e.target.value = '';
 });
-
-/* ============================================================
-   FIRESTORE: IMPORT PEMBAYARAN
-============================================================ */
 document.getElementById('payFileInput').addEventListener('change', e => {
-  const f = e.target.files[0]; if(!f) return;
-  const reader = new FileReader();
+  const f = e.target.files[0]; if(!f) return; const reader = new FileReader();
   reader.onload = async ev => {
     try {
-      const wb = XLSX.read(ev.target.result, {cellDates:true});
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:null, raw:true});
-      let ok = 0, skip = 0;
-      let batch = window.fb.writeBatch(window.fb.db);
-      let count = 0;
-
+      const wb = XLSX.read(ev.target.result, {cellDates:true}); const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:null, raw:true});
+      let ok = 0, skip = 0; let batch = window.fb.writeBatch(window.fb.db); let count = 0;
       for(const r of rows){
         const norm = {}; for(const k in r) norm[String(k).trim().toUpperCase()] = r[k];
-        const inv = String(norm.INV ?? norm.INVOICE ?? '').trim();
-        const amount = toNum(norm.JUMLAH_BAYAR ?? norm.JUMLAH ?? norm.NOMINAL ?? norm.AMOUNT);
-        const date = parseDate(norm.TGL_BAYAR ?? norm.TANGGAL ?? norm.DATE);
-        const method = String(norm.METODE ?? norm.METHOD ?? 'Transfer').trim();
-
+        const inv = String(norm.INV ?? norm.INVOICE ?? '').trim(); const amount = toNum(norm.JUMLAH_BAYAR ?? norm.JUMLAH ?? norm.NOMINAL ?? norm.AMOUNT); const date = parseDate(norm.TGL_BAYAR ?? norm.TANGGAL ?? norm.DATE); const method = String(norm.METODE ?? norm.METHOD ?? 'Transfer').trim();
         if(!inv || amount <= 0 || !date || !state.invMap.has(inv)) { skip++; continue; }
-
-        const docRef = window.fb.doc(window.fb.collection(window.fb.db, 'pembayaran'));
-        batch.set(docRef, { inv, amount, date, method });
-        count++; ok++;
-
+        const docRef = window.fb.doc(window.fb.collection(window.fb.db, 'pembayaran')); batch.set(docRef, { inv, amount, date, method }); count++; ok++;
         if (count === 500) { await batch.commit(); batch = window.fb.writeBatch(window.fb.db); count = 0; }
       }
       if (count > 0) await batch.commit();
-
-      if(ok > 0){
-        toast(`✅ Import Pembayaran: ${ok} masuk, ${skip} dilewati`, 5000);
-        await loadFromFirestore();
-      } else {
-        toast(`⚠️ Tidak ada pembayaran valid. ${skip} dilewati.`, 5000);
-      }
+      if(ok > 0) { toast(`✅ Import Pembayaran: ${ok} masuk`, 5000); await loadFromFirestore(); } else { toast(`⚠️ Tidak ada pembayaran valid`, 5000); }
     } catch(err) { toast('❌ Gagal: ' + err.message, 4000); }
   };
-  reader.readAsArrayBuffer(f);
-  e.target.value = '';
+  reader.readAsArrayBuffer(f); e.target.value = '';
 });
-
-/* ============================================================
-   FIRESTORE: ADD PAYMENT MANUAL
-============================================================ */
-document.getElementById('btnAddPay').onclick = async () => {
-  let inv = state.paySelectedInv;
-  if (!inv) { const typed = document.getElementById('payInvSearch').value.trim(); if (typed && state.invMap.has(typed)) inv = typed; }
-  const amount = toNum(document.getElementById('payAmount').value);
-  const date = parseDateInput(document.getElementById('payDateDisplay').value);
-
-  if(!inv) { toast('❌ Pilih invoice terlebih dahulu'); return; }
-  if(amount <= 0 || !date) { toast('Isi jumlah dan tanggal dengan benar'); return; }
-  
+document.getElementById('btnExport').onclick = () => {
+  if (!state.clean.length && !state.payments.length && !state.setoran.length) { toast('⚠️ Tidak ada data'); return; }
   try {
-    await window.fb.addDoc(window.fb.collection(window.fb.db, 'pembayaran'), {
-      inv, amount, date, method: document.getElementById('payMethod').value
-    });
-    toast('✅ Pembayaran disimpan ke Database');
-    
-    document.getElementById('payAmount').value = '';
-    state.paySelectedInv = null; document.getElementById('payInvSearch').value = ''; document.getElementById('paySelectedInfo').innerHTML = '';
-    await loadFromFirestore(); // Reload data
-  } catch(e) { toast('❌ Gagal simpan: ' + e.message); }
+    const wb = XLSX.utils.book_new();
+    if (state.clean.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.clean.map(r => ({ Invoice: r.inv, Tanggal: r.date ? formatDateDisplay(r.date) : '', Pelanggan: r.custName, Sales: r.sales, Produk: r.item, Jumlah: r.jumlah }))), 'Penjualan');
+    if (state.piutang.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.piutang.map(p => ({ Invoice: p.inv, Tanggal: p.date ? formatDateDisplay(p.date) : '', Pelanggan: p.custName, Sales: p.sales, Total: p.total, Dibayar: p.dibayar, Sisa: p.sisa, Status: p.status }))), 'Piutang');
+    if (state.payments.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.payments.map(p => ({ Invoice: p.inv, Tanggal: p.date ? formatDateDisplay(p.date) : '', Jumlah: p.amount, Metode: p.method }))), 'Pembayaran');
+    XLSX.writeFile(wb, `DataPenjualan_${dateKey(new Date())}.xlsx`); toast('✅ Export Excel berhasil', 4000);
+  } catch (err) { toast('❌ Gagal export: ' + err.message, 5000); }
 };
-
-/* ============================================================
-   FIRESTORE: ADD SETORAN MANUAL
-============================================================ */
-document.getElementById('btnAddSetor').onclick = async () => {
-  const amount = toNum(document.getElementById('setAmount').value);
-  const date = parseDateInput(document.getElementById('setDateDisplay').value);
-  if(amount <= 0 || !date) { toast('Isi data dengan benar (dd/mm/yyyy)'); return; }
-  
-  try {
-    await window.fb.addDoc(window.fb.collection(window.fb.db, 'setoran'), {
-      date, amount, bank: document.getElementById('setBank').value
-    });
-    toast('✅ Setoran disimpan ke Database');
-    document.getElementById('setAmount').value = '';
-    await loadFromFirestore();
-  } catch(e) { toast('❌ Gagal simpan: ' + e.message); }
-};
-
-/* ============================================================
-   FIRESTORE: DELETE ACTIONS
-============================================================ */
-document.querySelector('#tblPiutang').addEventListener('click', async e => {
-  const btn = e.target.closest('[data-delinv]'); if(!btn) return;
-  if(!confirm('Hapus invoice ini beserta pembayarannya dari Database?')) return;
-  const inv = btn.dataset.delinv;
-  
-  try {
-    // Cari _docId untuk invoice ini
-    const invDocs = state.clean.filter(r => r.inv === inv).map(r => r._docId);
-    const payDocs = state.payments.filter(p => p.inv === inv).map(p => p._docId);
-    
-    let batch = window.fb.writeBatch(window.fb.db);
-    invDocs.forEach(id => batch.delete(window.fb.doc(window.fb.db, 'penjualan', id)));
-    payDocs.forEach(id => batch.delete(window.fb.doc(window.fb.db, 'pembayaran', id)));
-    await batch.commit();
-    
-    toast('🗑️ Invoice dihapus dari Database');
-    await loadFromFirestore();
-  } catch(e) { toast('❌ Gagal hapus: ' + e.message); }
+document.querySelectorAll('.tab[data-pane]').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab[data-pane]').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+    t.classList.add('active'); document.getElementById('pane-'+t.dataset.pane).classList.add('active'); renderAll();
+  };
 });
 
-document.querySelector('#tblPay').addEventListener('click', async e => {
-  const btn = e.target.closest('[data-delpay]'); if(!btn) return;
-  if(!confirm('Hapus pembayaran ini dari Database?')) return;
-  const docId = btn.dataset.delpay;
-  
-  try {
-    await window.fb.deleteDoc(window.fb.doc(window.fb.db, 'pembayaran', docId));
-    toast('🗑️ Pembayaran dihapus');
-    await loadFromFirestore();
-  } catch(e) { toast('❌ Gagal hapus: ' + e.message); }
-});
-
-/* ... (Sisa fungsi UI seperti renderChart, Tab switching, dll ditaruh di sini) ... */
-// Inisialisasi awal UI
-document.getElementById('payDateDisplay').value = formatDateDisplay(new Date());
-document.getElementById('setDateDisplay').value = formatDateDisplay(new Date());
+// Init Tanggal
+document.getElementById('payDateDisplay').value = formatDateDisplay(new Date()); document.getElementById('setDateDisplay').value = formatDateDisplay(new Date());
 const today = new Date(); const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-document.getElementById('ledgerStartDate').value = formatDateDisplay(firstDay);
-document.getElementById('ledgerEndDate').value = formatDateDisplay(today);
-
-// Render awal (kosong sebelum login)
-renderAll();
+document.getElementById('ledgerStartDate').value = formatDateDisplay(firstDay); document.getElementById('ledgerEndDate').value = formatDateDisplay(today);
 </script>
 </body>
 </html>
